@@ -52,6 +52,12 @@ class Lexer:
         token = Token(type, literal)
         return token
 
+    def is_letter(self, ch: str) -> bool:
+        return ("a" <= ch and ch <= "z") or ("A" <= ch and ch <= "Z") or ch == "_"
+
+    def is_digit(self, ch: str) -> bool:
+        return "0" <= ch and ch <= "9"
+
     def read_identifier(self) -> str:
         start_position = self.position
         while self.ch.isalpha():
@@ -86,11 +92,11 @@ class Lexer:
             case "\0":
                 token = self._new_token(TokenType.EOF, "")
             case _:
-                if self.ch.isascii():
+                if self.is_letter(self.ch):
                     literal = self.read_identifier()
                     token = self._new_token(TokenType.IDENTIFIER, literal)
                     return token
-                elif self.ch.isdigit():
+                elif self.is_digit(self.ch):
                     literal = self.read_number()
                     if self.ch == ".":
                         self.read_char()
