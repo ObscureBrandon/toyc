@@ -1,30 +1,4 @@
-from enum import StrEnum
-from typing import override
-
-
-class TokenType(StrEnum):
-    PLUS = "+"
-    MINUS = "-"
-    ASTRESIK = "*"
-    SLASH = "/"
-    LPAREN = "("
-    RPAREN = ")"
-    EQUAL = "="
-    NUMBER = "NUMBER"
-    FLOAT = "FLOAT"
-    IDENTIFIER = "IDENTIFIER"
-    ILLEGAL = "ILLEGAL"
-    EOF = "EOF"
-
-
-class Token:
-    def __init__(self, type: TokenType, literal: str):
-        self.type: TokenType = type
-        self.literal: str = literal
-
-    @override
-    def __repr__(self):
-        return f"Token(type={self.type}, literal='{self.literal}')"
+from .token import Token, TokenType
 
 
 class Lexer:
@@ -80,7 +54,7 @@ class Lexer:
             case "-":
                 token = self._new_token(TokenType.MINUS, self.ch)
             case "*":
-                token = self._new_token(TokenType.ASTRESIK, self.ch)
+                token = self._new_token(TokenType.ASTERISK, self.ch)
             case "/":
                 token = self._new_token(TokenType.SLASH, self.ch)
             case "(":
@@ -112,36 +86,3 @@ class Lexer:
         self.read_char()
         return token
 
-
-def main():
-    print("TinyCompiler REPL:")
-    print("Type 'exit' to quit.")
-    while True:
-        try:
-            line = input("\n>>> ")
-            if line.strip().lower() == "exit":
-                break
-
-            lexer = Lexer(line)
-            ident_count = 0
-            while True:
-                tok = lexer.next_token()
-                if tok.type == TokenType.IDENTIFIER:
-                    ident_count += 1
-                    print(f"id{ident_count}", end=" ")
-                elif tok.type == TokenType.ILLEGAL:
-                    print("ILLEGAL", end=" ")
-                else:
-                    print(tok.literal, end=" ")
-
-                if tok.type == TokenType.EOF:
-                    break
-        except EOFError:
-            break
-        except KeyboardInterrupt:
-            print("\nExiting...")
-            break
-
-
-if __name__ == "__main__":
-    main()

@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: toyc-api
+    runtime: python
+    region: oregon
+    plan: free
+    branch: main
+    rootDir: backend
+    buildCommand: pip install uv && uv sync
+    startCommand: uv run uvicorn api:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12"
+      - key: UV_SYSTEM_PYTHON
+        value: "1"
