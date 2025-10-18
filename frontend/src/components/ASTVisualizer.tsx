@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import {
   ReactFlow,
   Node,
@@ -55,7 +55,7 @@ const convertASTToFlow = (ast: ASTNode): { nodes: FlowNode[]; edges: Edge[] } =>
   const edges: Edge[] = [];
   let nodeId = 0;
 
-  const traverse = (node: any, parentId: string | null = null): string => {
+  const traverse = (node: ASTNode, parentId: string | null = null): string => {
     const currentId = `node-${nodeId++}`;
     
     // Create label based on node type
@@ -70,7 +70,7 @@ const convertASTToFlow = (ast: ASTNode): { nodes: FlowNode[]; edges: Edge[] } =>
         label = `${node.identifier} =`;
         break;
       case 'BinaryOp':
-        label = node.operator;
+        label = node.operator || 'op';
         break;
       case 'Number':
         label = `${node.value}`;
@@ -81,7 +81,7 @@ const convertASTToFlow = (ast: ASTNode): { nodes: FlowNode[]; edges: Edge[] } =>
         value = node.value;
         break;
       case 'Identifier':
-        label = node.name;
+        label = node.name || 'id';
         value = node.name;
         break;
     }
@@ -123,7 +123,7 @@ const convertASTToFlow = (ast: ASTNode): { nodes: FlowNode[]; edges: Edge[] } =>
     // Recursively process children
     if (node.statements) {
       // Program node
-      node.statements.forEach((stmt: any) => traverse(stmt, currentId));
+      node.statements.forEach((stmt: ASTNode) => traverse(stmt, currentId));
     } else if (node.left && node.right) {
       // Binary operation
       traverse(node.left, currentId);
@@ -136,7 +136,7 @@ const convertASTToFlow = (ast: ASTNode): { nodes: FlowNode[]; edges: Edge[] } =>
     return currentId;
   };
 
-  traverse(ast.data);
+  traverse(ast);
   return { nodes, edges };
 };
 
@@ -194,7 +194,7 @@ export default function ASTVisualizer({ ast, error }: ASTVisualizerProps) {
       <div className="w-full h-full bg-gray-900 border border-gray-700 rounded-lg p-6 flex items-center justify-center">
         <div className="text-gray-400 text-center">
           <div className="text-lg font-medium mb-2">No AST Generated</div>
-          <div className="text-sm">Enter valid code and click "Parse" to see the syntax tree</div>
+          <div className="text-sm">Enter valid code and click &quot;Parse&quot; to see the syntax tree</div>
         </div>
       </div>
     );
@@ -217,7 +217,7 @@ export default function ASTVisualizer({ ast, error }: ASTVisualizerProps) {
         <Controls className="bg-gray-800 border-gray-600" />
         <MiniMap
           className="bg-gray-800 border border-gray-600"
-          nodeColor={(node) => getNodeColor(node.data.nodeType)}
+          nodeColor={(node) => getNodeColor((node.data as FlowNode['data']).nodeType)}
           maskColor="rgba(17, 24, 39, 0.8)"
         />
       </ReactFlow>

@@ -22,11 +22,11 @@ export function ParsingPhase({ visibleSteps, currentStep }: ParsingPhaseProps) {
   
   // Extract parse steps for the parsing trace
   const parseTrace: ParseStep[] = parsingSteps.map(step => ({
-    rule: step.state.grammar_rule || 'unknown',
-    action: step.state.action || step.description,
-    currentToken: step.state.current_token || '',
-    lookahead: step.state.peek_token || '',
-    stackDescription: step.state.stack_description || '',
+    rule: String(step.state.grammar_rule || 'unknown'),
+    action: String(step.state.action || step.description),
+    currentToken: String(step.state.current_token || ''),
+    lookahead: String(step.state.peek_token || ''),
+    stackDescription: String(step.state.stack_description || ''),
   }));
 
   const getRuleColor = (rule: string) => {
@@ -65,28 +65,28 @@ export function ParsingPhase({ visibleSteps, currentStep }: ParsingPhaseProps) {
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-gray-600 dark:text-gray-400">Current Rule:</span>
-              <span className={`px-2 py-1 rounded text-xs ${getRuleColor(currentStep.state.grammar_rule || '')}`}>
-                {currentStep.state.grammar_rule || 'N/A'}
+              <span className={`px-2 py-1 rounded text-xs ${getRuleColor(String(currentStep.state.grammar_rule || ''))}`}>
+                {String(currentStep.state.grammar_rule || 'N/A')}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600 dark:text-gray-400">Current Token:</span>
               <span className="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">
-                {currentStep.state.current_token || 'N/A'}
+                {String(currentStep.state.current_token || 'N/A')}
               </span>
             </div>
             {currentStep.state.peek_token && (
               <div className="flex justify-between">
                 <span className="text-gray-600 dark:text-gray-400">Lookahead:</span>
                 <span className="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">
-                  {currentStep.state.peek_token}
+                  {String(currentStep.state.peek_token)}
                 </span>
               </div>
             )}
             <div className="flex justify-between">
               <span className="text-gray-600 dark:text-gray-400">Action:</span>
               <span className="text-right flex-1 ml-2">
-                {currentStep.state.action || currentStep.description}
+                {String(currentStep.state.action || currentStep.description)}
               </span>
             </div>
           </div>
@@ -145,7 +145,7 @@ export function ParsingPhase({ visibleSteps, currentStep }: ParsingPhaseProps) {
             Parse Stack
           </h3>
           <div className="text-sm font-mono bg-gray-50 dark:bg-gray-900 p-2 rounded">
-            {currentStep.state.stack_description}
+            {String(currentStep.state.stack_description)}
           </div>
         </div>
       )}

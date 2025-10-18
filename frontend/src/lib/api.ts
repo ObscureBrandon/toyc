@@ -17,7 +17,7 @@ export interface LexerRequest {
 
 export interface ASTNode {
   type: string;
-  value?: any;
+  value?: string | number;
   name?: string;
   operator?: string;
   identifier?: string;
@@ -25,7 +25,7 @@ export interface ASTNode {
   right?: ASTNode;
   child?: ASTNode;
   statements?: ASTNode[];
-  data?: Record<string, any>;
+  data?: Record<string, string | number | boolean | null>;
 }
 
 export interface ParserResponse {
@@ -45,7 +45,7 @@ export interface TraceStep {
   step_id: number;
   position?: number;
   description: string;
-  state: Record<string, any>;
+  state: Record<string, string | number | boolean | ASTNode | null | undefined>;
 }
 
 export interface TraceResponse {

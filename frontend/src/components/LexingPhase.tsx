@@ -32,8 +32,8 @@ export function LexingPhase({ sourceCode, visibleSteps, currentStep }: LexingPha
   for (const step of lexingSteps) {
     if (step.state.action === 'token_created') {
       completedTokens.push({
-        type: step.state.token_type,
-        literal: step.state.literal,
+        type: String(step.state.token_type || 'unknown'),
+        literal: String(step.state.literal || ''),
         position: tokenStartPosition, // Use start position, not current position
         isComplete: true,
         isBuilding: false,
@@ -43,17 +43,19 @@ export function LexingPhase({ sourceCode, visibleSteps, currentStep }: LexingPha
       // Start of a new token - record the start position
       tokenStartPosition = step.position || 0;
       currentToken = {
-        type: step.state.token_type || 'unknown',
-        literal: step.state.current_char || '',
+        type: String(step.state.token_type || 'unknown'),
+        literal: String(step.state.current_char || ''),
         position: tokenStartPosition,
         isComplete: false,
         isBuilding: false,
       };
-    } else if (step.state.action === 'build_token' && currentToken) {
+    } else if (step.state.action === 'build_token' && currentToken !== null) {
       // Update current token with incremental lexeme
       currentToken = {
-        ...currentToken,
-        literal: step.state.current_lexeme || currentToken.literal,
+        type: currentToken.type,
+        position: currentToken.position,
+        isComplete: currentToken.isComplete,
+        literal: String(step.state.current_lexeme || currentToken.literal),
         isBuilding: true,
       };
     }
@@ -84,7 +86,7 @@ export function LexingPhase({ sourceCode, visibleSteps, currentStep }: LexingPha
           } else if (completedTokenAtIndex) {
             // Use token-specific color for completed tokens
             className += getTokenBackgroundColor(completedTokenAtIndex.type);
-          } else if (isInCurrentToken) {
+          } else if (isInCurrentToken && currentToken) {
             // Use light color for token being built
             className += getTokenBuildingColor(currentToken.type);
           }
@@ -225,7 +227,7 @@ export function LexingPhase({ sourceCode, visibleSteps, currentStep }: LexingPha
                 className={`min-w-[4rem] min-h-[4rem] px-2 py-1 rounded-lg flex flex-col items-center justify-center text-xs font-semibold shadow-md ${getTokenTypeColor(token.type)}`}
               >
                 <div className="text-xs font-bold mb-1 text-center">{getTokenTypeName(token.type)}</div>
-                <div className="text-xs font-mono text-center break-all">'{token.literal}'</div>
+                <div className="text-xs font-mono text-center break-all">&apos;{token.literal}&apos;</div>
               </motion.div>
             ))}
             
@@ -238,7 +240,7 @@ export function LexingPhase({ sourceCode, visibleSteps, currentStep }: LexingPha
                 className={`min-w-[4rem] min-h-[4rem] px-2 py-1 rounded-lg flex flex-col items-center justify-center text-xs font-semibold shadow-md border-2 border-dashed ${getTokenTypeColor(currentToken.type)} ${currentToken.isBuilding ? 'animate-pulse' : ''}`}
               >
                 <div className="text-xs font-bold mb-1 text-center">{getTokenTypeName(currentToken.type)}</div>
-                <div className="text-xs font-mono text-center break-all">'{currentToken.literal}'</div>
+                <div className="text-xs font-mono text-center break-all">&apos;{currentToken.literal}&apos;</div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -259,7 +261,7 @@ export function LexingPhase({ sourceCode, visibleSteps, currentStep }: LexingPha
               <div className="flex justify-between">
                 <span className="text-gray-600 dark:text-gray-400">Current Char:</span>
                 <span className="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">
-                  '{currentStep.state.current_char}'
+                  &apos;{String(currentStep.state.current_char)}&apos;
                 </span>
               </div>
             )}
@@ -267,15 +269,15 @@ export function LexingPhase({ sourceCode, visibleSteps, currentStep }: LexingPha
               <div className="flex justify-between">
                 <span className="text-gray-600 dark:text-gray-400">Current Lexeme:</span>
                 <span className="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">
-                  '{currentStep.state.current_lexeme}'
+                  &apos;{String(currentStep.state.current_lexeme)}&apos;
                 </span>
               </div>
             )}
             {currentStep.state.token_type && (
               <div className="flex justify-between">
                 <span className="text-gray-600 dark:text-gray-400">Token Type:</span>
-                <span className={`px-2 py-1 rounded text-xs ${getTokenTypeColor(currentStep.state.token_type)}`}>
-                  {currentStep.state.token_type}
+                <span className={`px-2 py-1 rounded text-xs ${getTokenTypeColor(String(currentStep.state.token_type))}`}>
+                  {String(currentStep.state.token_type)}
                 </span>
               </div>
             )}
@@ -283,7 +285,7 @@ export function LexingPhase({ sourceCode, visibleSteps, currentStep }: LexingPha
               <div className="flex justify-between">
                 <span className="text-gray-600 dark:text-gray-400">Action:</span>
                 <span className="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">
-                  {currentStep.state.action}
+                  {String(currentStep.state.action)}
                 </span>
               </div>
             )}

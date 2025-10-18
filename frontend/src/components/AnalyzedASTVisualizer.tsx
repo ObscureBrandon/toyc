@@ -80,14 +80,14 @@ const AnalyzedASTNode = ({ data }: { data: FlowNode['data'] }) => {
   );
 };
 
-const SimpleMiniMapNode = ({ x, y, width, height, color }: { x: number; y: number; width: number; height: number; color: string }) => {
+const SimpleMiniMapNode = ({ x, y, width, height, color }: { x: number; y: number; width: number; height: number; color?: string }) => {
   return (
     <rect
       x={x - width/2}
       y={y - height/2}
       width={width || 60}
       height={height || 30}
-      fill={color}
+      fill={color || '#6b7280'}
       stroke="#374151"
       strokeWidth="1"
       rx="3"
@@ -260,16 +260,16 @@ export function AnalyzedASTVisualizer({ analyzedAst }: AnalyzedASTVisualizerProp
         });
       }
 
-      if (astNode.type === 'Assignment' && 'value' in astNode && astNode.value) {
+      if (astNode.type === 'Assignment' && 'value' in astNode && astNode.value && typeof astNode.value === 'object') {
         buildFlowNodes(astNode.value as ASTNode, currentId);
       } else if (astNode.type === 'BinaryOp') {
-        if ('left' in astNode && astNode.left) {
+        if ('left' in astNode && astNode.left && typeof astNode.left === 'object') {
           buildFlowNodes(astNode.left as ASTNode, currentId);
         }
-        if ('right' in astNode && astNode.right) {
+        if ('right' in astNode && astNode.right && typeof astNode.right === 'object') {
           buildFlowNodes(astNode.right as ASTNode, currentId);
         }
-      } else if (astNode.type === 'Program' && 'statements' in astNode) {
+      } else if (astNode.type === 'Program' && 'statements' in astNode && Array.isArray(astNode.statements)) {
         (astNode.statements as ASTNode[]).forEach((stmt: ASTNode) => {
           buildFlowNodes(stmt, currentId);
         });

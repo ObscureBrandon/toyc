@@ -20,7 +20,7 @@ export function SemanticAnalysisPhase({ visibleSteps, currentStep, analyzedAst }
   const semanticSteps = visibleSteps.filter(step => step.phase === 'semantic-analysis');
   
   const semanticTrace: SemanticStep[] = semanticSteps.map(step => ({
-    action: step.state.action || 'unknown',
+    action: String(step.state.action || 'unknown'),
     description: step.description,
     details: JSON.stringify(step.state, null, 2),
   }));

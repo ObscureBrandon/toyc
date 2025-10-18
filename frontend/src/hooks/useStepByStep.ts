@@ -27,7 +27,7 @@ export function useStepByStep(steps: TraceStep[]): StepByStepState {
   const [currentStep, setCurrentStep] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState(1); // 1 step per second
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<number | null>(null);
 
   const totalSteps = steps.length;
   const canGoNext = currentStep < totalSteps - 1;

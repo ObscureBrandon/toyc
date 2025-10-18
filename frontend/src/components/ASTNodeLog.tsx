@@ -60,9 +60,15 @@ export function ASTNodeLog({ visibleSteps, currentStep }: ASTNodeLogProps) {
                 <div className="flex items-center justify-between">
                   <span 
                     className="px-2 py-1 rounded text-xs font-semibold text-white"
-                    style={{ backgroundColor: getNodeColor(step.state.ast_node?.type || 'Unknown') }}
+                    style={{ backgroundColor: getNodeColor(
+                      typeof step.state.ast_node === 'object' && step.state.ast_node !== null && 'type' in step.state.ast_node 
+                        ? step.state.ast_node.type 
+                        : 'Unknown'
+                    ) }}
                   >
-                    {step.state.ast_node?.type || 'Unknown'}
+                    {typeof step.state.ast_node === 'object' && step.state.ast_node !== null && 'type' in step.state.ast_node 
+                      ? step.state.ast_node.type 
+                      : 'Unknown'}
                   </span>
                   <span className="text-xs text-gray-500 dark:text-gray-400">
                     Step {step.step_id}

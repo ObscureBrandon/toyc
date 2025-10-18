@@ -8,17 +8,14 @@ import {
   Background,
   Controls,
   MiniMap,
-  useNodesState,
-  useEdgesState,
   ConnectionMode,
-  BaseEdge,
   EdgeProps,
   getSmoothStepPath,
   Handle,
   Position,
   useReactFlow,
 } from '@xyflow/react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { TraceStep, ASTNode } from '@/lib/api';
 
 import '@xyflow/react/dist/style.css';
@@ -96,14 +93,14 @@ const AnimatedNode = ({ data }: { data: FlowNode['data'] }) => {
 };
 
 // Simple MiniMap node component that just renders a colored rectangle
-const SimpleMiniMapNode = ({ x, y, width, height, color }: any) => {
+const SimpleMiniMapNode = ({ x, y, width, height, color }: { x: number; y: number; width: number; height: number; color?: string }) => {
   return (
     <rect
       x={x - width/2}
       y={y - height/2}
       width={width || 60}
       height={height || 30}
-      fill={color}
+      fill={color || '#6b7280'}
       stroke="#374151"
       strokeWidth="1"
       rx="3"
@@ -122,6 +119,8 @@ const AnimatedEdge = ({ id, sourceX, sourceY, targetX, targetY, data }: EdgeProp
     targetPosition: Position.Top,
   });
 
+  const delay = typeof data?.delay === 'number' ? data.delay : 0;
+
   return (
     <motion.path
       id={id}
@@ -133,7 +132,7 @@ const AnimatedEdge = ({ id, sourceX, sourceY, targetX, targetY, data }: EdgeProp
       animate={{ pathLength: 1 }}
       transition={{ 
         duration: 0.8,
-        delay: data?.delay || 0,
+        delay,
         ease: "easeInOut"
       }}
     />
@@ -182,7 +181,10 @@ export function AnimatedAST({ visibleSteps, currentStep }: AnimatedASTProps) {
     }
     
     // Find the Program node (the true root of the AST)
-    const programStep = astSteps.find(step => step.state.ast_node?.type === 'Program');
+    const programStep = astSteps.find(step => {
+      const node = step.state.ast_node;
+      return node && typeof node === 'object' && 'type' in node && node.type === 'Program';
+    });
     const rootAstNode = programStep?.state.ast_node || astSteps[astSteps.length - 1]?.state.ast_node;
     
     if (!rootAstNode) {
@@ -194,7 +196,7 @@ export function AnimatedAST({ visibleSteps, currentStep }: AnimatedASTProps) {
     const nodeIdToStepIndex = new Map<string, number>();
     astSteps.forEach((step, index) => {
       const astNode = step.state.ast_node;
-      if (astNode) {
+      if (astNode && typeof astNode === 'object' && 'type' in astNode) {
         // Create a unique key for this node
         let key = astNode.type;
         if (astNode.type === 'Number' || astNode.type === 'Float') {
@@ -313,19 +315,19 @@ export function AnimatedAST({ visibleSteps, currentStep }: AnimatedASTProps) {
       }
 
       // Build children based on AST node structure
-      if (astNode.type === 'Assignment' && 'value' in astNode && astNode.value) {
+      if (astNode.type === 'Assignment' && 'value' in astNode && astNode.value && typeof astNode.value === 'object') {
         buildFlowNodes(astNode.value as ASTNode, currentId, depth + 1);
       } else if (astNode.type === 'BinaryOp') {
-        if ('left' in astNode && astNode.left) {
+        if ('left' in astNode && astNode.left && typeof astNode.left === 'object') {
           buildFlowNodes(astNode.left as ASTNode, currentId, depth + 1);
         }
-        if ('right' in astNode && astNode.right) {
+        if ('right' in astNode && astNode.right && typeof astNode.right === 'object') {
           buildFlowNodes(astNode.right as ASTNode, currentId, depth + 1);
         }
-      } else if (astNode.type === 'Int2Float' && 'child' in astNode && astNode.child) {
+      } else if (astNode.type === 'Int2Float' && 'child' in astNode && astNode.child && typeof astNode.child === 'object') {
         buildFlowNodes(astNode.child as ASTNode, currentId, depth + 1);
-      } else if (astNode.type === 'Program' && 'statements' in astNode) {
-        (astNode.statements as ASTNode[]).forEach((stmt: ASTNode, index: number) => {
+      } else if (astNode.type === 'Program' && 'statements' in astNode && Array.isArray(astNode.statements)) {
+        (astNode.statements as ASTNode[]).forEach((stmt: ASTNode) => {
           buildFlowNodes(stmt, currentId, depth + 1);
         });
       }
@@ -333,7 +335,9 @@ export function AnimatedAST({ visibleSteps, currentStep }: AnimatedASTProps) {
       return currentId;
     };
 
-    buildFlowNodes(rootAstNode);
+    if (typeof rootAstNode === 'object' && 'type' in rootAstNode) {
+      buildFlowNodes(rootAstNode as ASTNode);
+    }
 
     // Better tree layout positioning
     const layoutNodes = (nodes: FlowNode[]): FlowNode[] => {
@@ -345,7 +349,6 @@ export function AnimatedAST({ visibleSteps, currentStep }: AnimatedASTProps) {
       if (!rootNode) return nodes;
 
       // Simple tree layout algorithm
-      const positioned = new Set<string>();
       const layoutedNodes = [...nodes];
       
      const positionSubtree = (nodeId: string, x: number, y: number, width: number) => {
@@ -383,7 +386,7 @@ export function AnimatedAST({ visibleSteps, currentStep }: AnimatedASTProps) {
       incrementalNodes: layoutNodes(nodes), 
       incrementalEdges: edges 
     };
-  }, [astSteps]);
+  }, [astSteps, currentStep?.step_id]);
 
   // Compute visible nodes and edges based on current step
   const { visibleNodes, visibleEdges } = useMemo(() => {
