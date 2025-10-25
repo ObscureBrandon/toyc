@@ -25,6 +25,11 @@ export interface ASTNode {
   right?: ASTNode;
   child?: ASTNode;
   statements?: ASTNode[];
+  condition?: ASTNode;
+  then_branch?: ASTNode;
+  else_branch?: ASTNode;
+  body?: ASTNode;
+  expression?: ASTNode;
   data?: Record<string, string | number | boolean | null>;
 }
 

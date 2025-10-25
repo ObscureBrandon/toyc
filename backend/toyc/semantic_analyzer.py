@@ -8,6 +8,11 @@ from .ast import (
     IdentifierNode,
     AssignmentNode,
     Int2FloatNode,
+    BlockNode,
+    IfNode,
+    RepeatUntilNode,
+    ReadNode,
+    WriteNode,
 )
 
 
@@ -34,6 +39,16 @@ class SemanticAnalyzer:
         """Analyze a statement node"""
         if isinstance(node, AssignmentNode):
             return self.analyze_assignment(node)
+        elif isinstance(node, IfNode):
+            return self.analyze_if(node)
+        elif isinstance(node, RepeatUntilNode):
+            return self.analyze_repeat(node)
+        elif isinstance(node, ReadNode):
+            return self.analyze_read(node)
+        elif isinstance(node, WriteNode):
+            return self.analyze_write(node)
+        elif isinstance(node, BlockNode):
+            return self.analyze_block(node)
         else:
             return self.analyze_expression(node)
 
@@ -96,3 +111,35 @@ class SemanticAnalyzer:
             return self.get_expression_type(node.value)
         else:
             return "unknown"
+
+    def analyze_block(self, node: BlockNode) -> BlockNode:
+        """Analyze a block of statements"""
+        analyzed_statements = []
+        for stmt in node.statements:
+            analyzed_statements.append(self.analyze_statement(stmt))
+        return BlockNode(analyzed_statements)
+
+    def analyze_if(self, node: IfNode) -> IfNode:
+        """Analyze if statement"""
+        analyzed_condition = self.analyze_expression(node.condition)
+        analyzed_then = self.analyze_statement(node.then_branch)
+        analyzed_else = None
+        if node.else_branch:
+            analyzed_else = self.analyze_statement(node.else_branch)
+        return IfNode(analyzed_condition, analyzed_then, analyzed_else)
+
+    def analyze_repeat(self, node: RepeatUntilNode) -> RepeatUntilNode:
+        """Analyze repeat-until loop"""
+        analyzed_body = self.analyze_statement(node.body)
+        analyzed_condition = self.analyze_expression(node.condition)
+        return RepeatUntilNode(analyzed_body, analyzed_condition)
+
+    def analyze_read(self, node: ReadNode) -> ReadNode:
+        """Analyze read statement - marks variable as initialized with unknown type"""
+        self.symbol_table[node.identifier] = "unknown"
+        return node
+
+    def analyze_write(self, node: WriteNode) -> WriteNode:
+        """Analyze write statement"""
+        analyzed_expression = self.analyze_expression(node.expression)
+        return WriteNode(analyzed_expression)

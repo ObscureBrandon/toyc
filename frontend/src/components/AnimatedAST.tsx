@@ -51,6 +51,16 @@ const getNodeColor = (nodeType: string): string => {
       return '#06b6d4'; // cyan
     case 'Int2Float':
       return '#ec4899'; // pink/magenta
+    case 'Block':
+      return '#6366f1'; // indigo
+    case 'If':
+      return '#14b8a6'; // teal
+    case 'RepeatUntil':
+      return '#f97316'; // orange
+    case 'Read':
+      return '#22c55e'; // green
+    case 'Write':
+      return '#a855f7'; // purple
     default:
       return '#6b7280'; // gray
   }
@@ -69,11 +79,12 @@ const AnimatedNode = ({ data }: { data: FlowNode['data'] }) => {
         duration: 0.5,
         delay: data.stepIndex * 0.2 
       }}
-      className="px-3 py-2 rounded-lg border-2 text-white font-bold text-sm text-center min-w-[80px] relative"
+      className="px-3 rounded-lg border-2 text-white font-bold text-sm text-center min-w-[80px] relative flex items-center justify-center"
       style={{
         backgroundColor: getNodeColor(data.nodeType),
         borderColor: data.highlighted ? '#fbbf24' : '#374151',
         borderWidth: data.highlighted ? '3px' : '2px',
+        height: '50px',
       }}
     >
       {/* Invisible handles for React Flow connections */}
@@ -269,6 +280,21 @@ export function AnimatedAST({ visibleSteps, currentStep }: AnimatedASTProps) {
         case 'Int2Float':
           label = 'Int2Float';
           break;
+        case 'Block':
+          label = 'Block';
+          break;
+        case 'If':
+          label = 'if';
+          break;
+        case 'RepeatUntil':
+          label = 'repeat-until';
+          break;
+        case 'Read':
+          label = `read ${astNode.identifier || '?'}`;
+          break;
+        case 'Write':
+          label = 'write';
+          break;
       }
 
       // Calculate position based on tree layout
@@ -287,10 +313,10 @@ export function AnimatedAST({ visibleSteps, currentStep }: AnimatedASTProps) {
            stepIndex,
            highlighted: currentStep?.step_id === stepId,
          },
-         draggable: false,
-         width: 80,
-         height: 40,
-       });
+          draggable: false,
+          width: 80,
+          height: 50,
+        });
 
       // Add edge from parent (only if parentId is not null)
       if (parentId && parentId !== 'null' && parentId !== null) {
@@ -330,6 +356,29 @@ export function AnimatedAST({ visibleSteps, currentStep }: AnimatedASTProps) {
         (astNode.statements as ASTNode[]).forEach((stmt: ASTNode) => {
           buildFlowNodes(stmt, currentId, depth + 1);
         });
+      } else if (astNode.type === 'Block' && 'statements' in astNode && Array.isArray(astNode.statements)) {
+        (astNode.statements as ASTNode[]).forEach((stmt: ASTNode) => {
+          buildFlowNodes(stmt, currentId, depth + 1);
+        });
+      } else if (astNode.type === 'If') {
+        if ('condition' in astNode && astNode.condition) {
+          buildFlowNodes(astNode.condition as ASTNode, currentId, depth + 1);
+        }
+        if ('then_branch' in astNode && astNode.then_branch) {
+          buildFlowNodes(astNode.then_branch as ASTNode, currentId, depth + 1);
+        }
+        if ('else_branch' in astNode && astNode.else_branch) {
+          buildFlowNodes(astNode.else_branch as ASTNode, currentId, depth + 1);
+        }
+      } else if (astNode.type === 'RepeatUntil') {
+        if ('body' in astNode && astNode.body) {
+          buildFlowNodes(astNode.body as ASTNode, currentId, depth + 1);
+        }
+        if ('condition' in astNode && astNode.condition) {
+          buildFlowNodes(astNode.condition as ASTNode, currentId, depth + 1);
+        }
+      } else if (astNode.type === 'Write' && 'expression' in astNode && astNode.expression) {
+        buildFlowNodes(astNode.expression as ASTNode, currentId, depth + 1);
       }
 
       return currentId;
@@ -362,17 +411,22 @@ export function AnimatedAST({ visibleSteps, currentStep }: AnimatedASTProps) {
         const childCount = childEdges.length;
         
         if (childCount > 0) {
-          const childWidth = width / childCount;
+          // Ensure minimum spacing per child to prevent clustering
+          const minSpacingPerChild = 250;
+          const requiredWidth = Math.max(width, childCount * minSpacingPerChild);
+          const childWidth = requiredWidth / childCount;
+          
           childEdges.forEach((edge, index) => {
-            const childX = x + (index * childWidth) + (childWidth / 2) - (width / 2);
-            const childY = y + 120;
+            const childX = x + (index * childWidth) + (childWidth / 2) - (requiredWidth / 2);
+            const childY = y + 150; // Increased vertical spacing
             positionSubtree(edge.target, childX, childY, childWidth);
           });
         }
       };
       
-      // Start with better centering - use container width / 2 as center point
-      positionSubtree(rootNode.id, 200, 50, 600);
+      // Calculate initial width based on tree complexity
+      const maxWidth = Math.max(1600, nodes.length * 150);
+      positionSubtree(rootNode.id, maxWidth / 2, 50, maxWidth);
       return layoutedNodes;
     };
 

@@ -11,6 +11,11 @@ from .ast import (
     IdentifierNode,
     AssignmentNode,
     Int2FloatNode,
+    BlockNode,
+    IfNode,
+    RepeatUntilNode,
+    ReadNode,
+    WriteNode,
     ParseError,
 )
 from .semantic_analyzer import SemanticAnalyzer
@@ -773,11 +778,51 @@ class TracingParser:
         return program
 
     def parse_statement(self) -> ASTNode:
-        """Parse a statement (assignment or expression)"""
-        # Check for assignment
-        if (
-            self.current_token
-            and self.current_token.type == TokenType.IDENTIFIER
+        if not self.current_token:
+            raise ParseError("Unexpected end of input", self.position)
+        
+        if self.current_token.type == TokenType.IF:
+            self.trace_step(
+                "Detected if statement",
+                {
+                    "action": "detect_if",
+                    "grammar_rule": "IfStmt → IF LPAREN Expression RPAREN Block (ELSE Block)? END",
+                },
+            )
+            return self.parse_if_statement()
+        
+        elif self.current_token.type == TokenType.REPEAT:
+            self.trace_step(
+                "Detected repeat statement",
+                {
+                    "action": "detect_repeat",
+                    "grammar_rule": "RepeatStmt → REPEAT Block UNTIL Expression SEMICOLON",
+                },
+            )
+            return self.parse_repeat_until()
+        
+        elif self.current_token.type == TokenType.READ:
+            self.trace_step(
+                "Detected read statement",
+                {
+                    "action": "detect_read",
+                    "grammar_rule": "ReadStmt → READ IDENTIFIER SEMICOLON",
+                },
+            )
+            return self.parse_read_statement()
+        
+        elif self.current_token.type == TokenType.WRITE:
+            self.trace_step(
+                "Detected write statement",
+                {
+                    "action": "detect_write",
+                    "grammar_rule": "WriteStmt → WRITE Expression SEMICOLON",
+                },
+            )
+            return self.parse_write_statement()
+        
+        elif (
+            self.current_token.type == TokenType.IDENTIFIER
             and self.peek_token
             and self.peek_token.type == TokenType.ASSIGN
         ):
@@ -798,7 +843,11 @@ class TracingParser:
                     "grammar_rule": "Expression → Term ((PLUS | MINUS) Term)*",
                 },
             )
-            return self.parse_expression()
+            expr = self.parse_expression()
+            if self.current_token and self.current_token.type == TokenType.SEMICOLON:
+                self.trace_step("Consuming statement-terminating semicolon", {"action": "consume_semicolon"})
+                self.advance()
+            return expr
 
     def parse_assignment(self) -> AssignmentNode:
         """Parse assignment statement"""
@@ -833,7 +882,401 @@ class TracingParser:
             self.node_stack[-1] if self.node_stack else None,
         )
 
+        if not self.current_token or self.current_token.type != TokenType.SEMICOLON:
+            raise ParseError("Expected ';' after assignment", self.position)
+
+        self.trace_step("Consuming assignment semicolon", {"action": "consume_semicolon"})
+        self.advance()
+
         return assignment
+
+    def parse_block(self, terminators: list[TokenType]) -> BlockNode:
+        self.trace_step(
+            f"Starting block parsing (terminators: {[t.name for t in terminators]})",
+            {
+                "action": "start_block",
+                "terminators": [t.name for t in terminators],
+                "grammar_rule": "Block → Statement+",
+            },
+        )
+        
+        statements = []
+        block_node_id = self.get_next_node_id()
+        self.node_stack.append(block_node_id)
+        
+        while (
+            self.current_token
+            and self.current_token.type != TokenType.EOF
+            and self.current_token.type not in terminators
+        ):
+            self.trace_step(
+                f"Parsing statement in block (token: {self.current_token.type.name})",
+                {
+                    "action": "parse_block_statement",
+                    "current_token": self.current_token.type.name,
+                    "statement_count": len(statements),
+                },
+            )
+            
+            stmt = self.parse_statement()
+            statements.append(stmt)
+            
+            self.trace_step(
+                f"Added statement {len(statements)} to block",
+                {
+                    "action": "add_block_statement",
+                    "statement_type": type(stmt).__name__,
+                    "statement_count": len(statements),
+                },
+            )
+        
+        self.node_stack.pop()
+        
+        block = BlockNode(statements)
+        self.trace_ast_node_creation(
+            f"Created block node with {len(statements)} statements",
+            block,
+            block_node_id,
+            self.node_stack[-1] if self.node_stack else None,
+        )
+        
+        return block
+
+    def parse_if_statement(self) -> IfNode:
+        self.trace_step(
+            "Starting if statement parsing",
+            {
+                "action": "start_if",
+                "grammar_rule": "IfStmt → IF LPAREN Expression RPAREN THEN Block (ELSE Block)? END",
+            },
+        )
+        
+        if_node_id = self.get_next_node_id()
+        self.node_stack.append(if_node_id)
+        
+        self.advance()
+        
+        if not self.current_token or self.current_token.type != TokenType.LPAREN:
+            raise ParseError("Expected '(' after 'if'", self.position)
+        
+        self.trace_step(
+            "Parsing if condition",
+            {"action": "parse_if_condition", "current_token": self.current_token.type.name},
+        )
+        self.advance()
+        
+        condition = self.parse_or_expression()
+        
+        if not self.current_token or self.current_token.type != TokenType.RPAREN:
+            raise ParseError("Expected ')' after if condition", self.position)
+        
+        self.advance()
+        
+        if not self.current_token or self.current_token.type != TokenType.THEN:
+            raise ParseError("Expected 'then' after if condition", self.position)
+        
+        self.trace_step(
+            "Found 'then' keyword",
+            {"action": "expect_then", "current_token": self.current_token.type.name},
+        )
+        self.advance()
+        
+        self.trace_step(
+            "Parsing if then-branch",
+            {"action": "parse_then_branch"},
+        )
+        
+        then_branch = self.parse_block([TokenType.ELSE, TokenType.END])
+        
+        else_branch = None
+        if self.current_token and self.current_token.type == TokenType.ELSE:
+            self.trace_step(
+                "Found else clause, parsing else-branch",
+                {"action": "parse_else_branch"},
+            )
+            self.advance()
+            else_branch = self.parse_block([TokenType.END])
+        
+        if not self.current_token or self.current_token.type != TokenType.END:
+            raise ParseError("Expected 'end' after if statement", self.position)
+        
+        self.advance()
+        
+        self.node_stack.pop()
+        
+        if_node = IfNode(condition, then_branch, else_branch)
+        self.trace_ast_node_creation(
+            f"Created if node (with{'out' if else_branch is None else ''} else)",
+            if_node,
+            if_node_id,
+            self.node_stack[-1] if self.node_stack else None,
+        )
+        
+        return if_node
+
+    def parse_repeat_until(self) -> RepeatUntilNode:
+        self.trace_step(
+            "Starting repeat-until parsing",
+            {
+                "action": "start_repeat",
+                "grammar_rule": "RepeatStmt → REPEAT Block UNTIL Expression SEMICOLON",
+            },
+        )
+        
+        repeat_node_id = self.get_next_node_id()
+        self.node_stack.append(repeat_node_id)
+        
+        self.advance()
+        
+        self.trace_step(
+            "Parsing repeat body",
+            {"action": "parse_repeat_body"},
+        )
+        
+        body = self.parse_block([TokenType.UNTIL])
+        
+        if not self.current_token or self.current_token.type != TokenType.UNTIL:
+            raise ParseError("Expected 'until' after repeat body", self.position)
+        
+        self.trace_step(
+            "Parsing until condition",
+            {"action": "parse_until_condition"},
+        )
+        self.advance()
+        
+        condition = self.parse_or_expression()
+        
+        if not self.current_token or self.current_token.type != TokenType.SEMICOLON:
+            raise ParseError("Expected ';' after until condition", self.position)
+        
+        self.advance()
+        
+        self.node_stack.pop()
+        
+        repeat_node = RepeatUntilNode(body, condition)
+        self.trace_ast_node_creation(
+            "Created repeat-until node",
+            repeat_node,
+            repeat_node_id,
+            self.node_stack[-1] if self.node_stack else None,
+        )
+        
+        return repeat_node
+
+    def parse_read_statement(self) -> ReadNode:
+        self.trace_step(
+            "Starting read statement parsing",
+            {
+                "action": "start_read",
+                "grammar_rule": "ReadStmt → READ IDENTIFIER SEMICOLON",
+            },
+        )
+        
+        self.advance()
+        
+        if not self.current_token or self.current_token.type != TokenType.IDENTIFIER:
+            raise ParseError("Expected identifier after 'read'", self.position)
+        
+        identifier = self.current_token.literal
+        
+        self.trace_step(
+            f"Reading into variable '{identifier}'",
+            {"action": "parse_read_identifier", "identifier": identifier},
+        )
+        
+        self.advance()
+        
+        if not self.current_token or self.current_token.type != TokenType.SEMICOLON:
+            raise ParseError("Expected ';' after read statement", self.position)
+        
+        self.advance()
+        
+        read_node = ReadNode(identifier)
+        read_node_id = self.get_next_node_id()
+        
+        self.trace_ast_node_creation(
+            f"Created read node for '{identifier}'",
+            read_node,
+            read_node_id,
+            self.node_stack[-1] if self.node_stack else None,
+        )
+        
+        return read_node
+
+    def parse_write_statement(self) -> WriteNode:
+        self.trace_step(
+            "Starting write statement parsing",
+            {
+                "action": "start_write",
+                "grammar_rule": "WriteStmt → WRITE Expression SEMICOLON",
+            },
+        )
+        
+        write_node_id = self.get_next_node_id()
+        self.node_stack.append(write_node_id)
+        
+        self.advance()
+        
+        self.trace_step(
+            "Parsing write expression",
+            {"action": "parse_write_expression"},
+        )
+        
+        expression = self.parse_or_expression()
+        
+        if not self.current_token or self.current_token.type != TokenType.SEMICOLON:
+            raise ParseError("Expected ';' after write statement", self.position)
+        
+        self.advance()
+        
+        self.node_stack.pop()
+        
+        write_node = WriteNode(expression)
+        self.trace_ast_node_creation(
+            "Created write node",
+            write_node,
+            write_node_id,
+            self.node_stack[-1] if self.node_stack else None,
+        )
+        
+        return write_node
+
+    def parse_or_expression(self) -> ASTNode:
+        self.trace_step(
+            "Starting or-expression parsing",
+            {
+                "action": "start_or_expression",
+                "grammar_rule": "OrExpr → AndExpr (OR AndExpr)*",
+            },
+        )
+        
+        left = self.parse_and_expression()
+        
+        while self.current_token and self.current_token.type == TokenType.OR:
+            operator = self.current_token.literal
+            
+            self.trace_step(
+                f"Found OR operator: '{operator}'",
+                {
+                    "operator": operator,
+                    "action": "detect_or_op",
+                    "left_type": type(left).__name__,
+                },
+            )
+            
+            self.advance()
+            
+            or_node_id = self.get_next_node_id()
+            self.node_stack.append(or_node_id)
+            
+            right = self.parse_and_expression()
+            
+            self.node_stack.pop()
+            
+            left = BinaryOpNode(operator, left, right)
+            
+            self.trace_ast_node_creation(
+                f"Created OR operation node",
+                left,
+                or_node_id,
+                self.node_stack[-1] if self.node_stack else None,
+            )
+        
+        return left
+
+    def parse_and_expression(self) -> ASTNode:
+        self.trace_step(
+            "Starting and-expression parsing",
+            {
+                "action": "start_and_expression",
+                "grammar_rule": "AndExpr → Comparison (AND Comparison)*",
+            },
+        )
+        
+        left = self.parse_comparison()
+        
+        while self.current_token and self.current_token.type == TokenType.AND:
+            operator = self.current_token.literal
+            
+            self.trace_step(
+                f"Found AND operator: '{operator}'",
+                {
+                    "operator": operator,
+                    "action": "detect_and_op",
+                    "left_type": type(left).__name__,
+                },
+            )
+            
+            self.advance()
+            
+            and_node_id = self.get_next_node_id()
+            self.node_stack.append(and_node_id)
+            
+            right = self.parse_comparison()
+            
+            self.node_stack.pop()
+            
+            left = BinaryOpNode(operator, left, right)
+            
+            self.trace_ast_node_creation(
+                f"Created AND operation node",
+                left,
+                and_node_id,
+                self.node_stack[-1] if self.node_stack else None,
+            )
+        
+        return left
+
+    def parse_comparison(self) -> ASTNode:
+        self.trace_step(
+            "Starting comparison parsing",
+            {
+                "action": "start_comparison",
+                "grammar_rule": "Comparison → Expression ((EQ | NEQ | LT | GT | LT_EQ | GT_EQ) Expression)?",
+            },
+        )
+        
+        left = self.parse_expression()
+        
+        if self.current_token and self.current_token.type in [
+            TokenType.EQ,
+            TokenType.NEQ,
+            TokenType.LT,
+            TokenType.GT,
+            TokenType.LT_EQ,
+            TokenType.GT_EQ,
+        ]:
+            operator = self.current_token.literal
+            
+            self.trace_step(
+                f"Found comparison operator: '{operator}'",
+                {
+                    "operator": operator,
+                    "action": "detect_comparison_op",
+                    "left_type": type(left).__name__,
+                },
+            )
+            
+            self.advance()
+            
+            comp_node_id = self.get_next_node_id()
+            self.node_stack.append(comp_node_id)
+            
+            right = self.parse_expression()
+            
+            self.node_stack.pop()
+            
+            left = BinaryOpNode(operator, left, right)
+            
+            self.trace_ast_node_creation(
+                f"Created comparison node: {operator}",
+                left,
+                comp_node_id,
+                self.node_stack[-1] if self.node_stack else None,
+            )
+        
+        return left
+
 
     def parse_expression(self) -> ASTNode:
         """Parse expression with addition/subtraction"""
@@ -890,7 +1333,7 @@ class TracingParser:
             "Starting term parsing",
             {
                 "action": "start_term",
-                "grammar_rule": "Term → Factor ((ASTERISK | SLASH) Factor)*",
+                "grammar_rule": "Term → Factor ((ASTERISK | SLASH | PERCENT) Factor)*",
             },
         )
 
@@ -899,6 +1342,7 @@ class TracingParser:
         while self.current_token and self.current_token.type in [
             TokenType.ASTERISK,
             TokenType.SLASH,
+            TokenType.PERCENT,
         ]:
             operator = self.current_token.literal
 
@@ -1220,6 +1664,142 @@ class TracingSemanticAnalyzer(SemanticAnalyzer):
             )
 
         return BinaryOpNode(node.operator, left, right)
+
+    def analyze_block(self, node: BlockNode) -> BlockNode:
+        """Analyze a block of statements with tracing"""
+        self.trace_step(
+            f"Analyzing block with {len(node.statements)} statements",
+            {
+                "action": "start_block_analysis",
+                "statement_count": len(node.statements),
+            },
+        )
+
+        analyzed_statements = []
+        for i, stmt in enumerate(node.statements):
+            self.trace_step(
+                f"Analyzing block statement {i + 1} of {len(node.statements)}",
+                {
+                    "action": "analyze_block_statement",
+                    "statement_index": i,
+                    "statement_type": type(stmt).__name__,
+                },
+            )
+            analyzed_statements.append(self.analyze_statement(stmt))
+
+        self.trace_step(
+            "Completed block analysis",
+            {"action": "complete_block_analysis"},
+        )
+
+        return BlockNode(analyzed_statements)
+
+    def analyze_if(self, node: IfNode) -> IfNode:
+        """Analyze if statement with tracing"""
+        self.trace_step(
+            "Analyzing if statement",
+            {
+                "action": "start_if_analysis",
+                "has_else": node.else_branch is not None,
+            },
+        )
+
+        self.trace_step(
+            "Analyzing if condition",
+            {"action": "analyze_if_condition"},
+        )
+        analyzed_condition = self.analyze_expression(node.condition)
+
+        self.trace_step(
+            "Analyzing then branch",
+            {"action": "analyze_then_branch"},
+        )
+        analyzed_then = self.analyze_statement(node.then_branch)
+
+        analyzed_else = None
+        if node.else_branch:
+            self.trace_step(
+                "Analyzing else branch",
+                {"action": "analyze_else_branch"},
+            )
+            analyzed_else = self.analyze_statement(node.else_branch)
+
+        self.trace_step(
+            "Completed if statement analysis",
+            {"action": "complete_if_analysis"},
+        )
+
+        return IfNode(analyzed_condition, analyzed_then, analyzed_else)
+
+    def analyze_repeat(self, node: RepeatUntilNode) -> RepeatUntilNode:
+        """Analyze repeat-until loop with tracing"""
+        self.trace_step(
+            "Analyzing repeat-until loop",
+            {"action": "start_repeat_analysis"},
+        )
+
+        self.trace_step(
+            "Analyzing loop body",
+            {"action": "analyze_repeat_body"},
+        )
+        analyzed_body = self.analyze_statement(node.body)
+
+        self.trace_step(
+            "Analyzing until condition",
+            {"action": "analyze_until_condition"},
+        )
+        analyzed_condition = self.analyze_expression(node.condition)
+
+        self.trace_step(
+            "Completed repeat-until analysis",
+            {"action": "complete_repeat_analysis"},
+        )
+
+        return RepeatUntilNode(analyzed_body, analyzed_condition)
+
+    def analyze_read(self, node: ReadNode) -> ReadNode:
+        """Analyze read statement with tracing"""
+        self.trace_step(
+            f"Analyzing read statement for variable '{node.identifier}'",
+            {
+                "action": "start_read_analysis",
+                "identifier": node.identifier,
+            },
+        )
+
+        self.symbol_table[node.identifier] = "unknown"
+
+        self.trace_step(
+            f"Variable '{node.identifier}' marked as initialized (type: unknown)",
+            {
+                "action": "update_symbol_table",
+                "identifier": node.identifier,
+                "type": "unknown",
+                "symbol_table": dict(self.symbol_table),
+            },
+        )
+
+        return node
+
+    def analyze_write(self, node: WriteNode) -> WriteNode:
+        """Analyze write statement with tracing"""
+        self.trace_step(
+            "Analyzing write statement",
+            {"action": "start_write_analysis"},
+        )
+
+        analyzed_expression = self.analyze_expression(node.expression)
+
+        expr_type = self.get_expression_type(analyzed_expression)
+        self.trace_step(
+            f"Write expression has type: {expr_type}",
+            {
+                "action": "complete_write_analysis",
+                "expression_type": expr_type,
+            },
+        )
+
+        return WriteNode(analyzed_expression)
 
 
 def trace_compilation(source_code: str) -> dict:

@@ -1,9 +1,15 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from models import (
-    LexerRequest, LexerResponse, TokenResponse, 
-    ParserRequest, ParserResponse, ASTNodeResponse,
-    TraceRequest, TraceResponse, TraceStep
+    LexerRequest,
+    LexerResponse,
+    TokenResponse,
+    ParserRequest,
+    ParserResponse,
+    ASTNodeResponse,
+    TraceRequest,
+    TraceResponse,
+    TraceStep,
 )
 from toyc.lexer import Lexer
 from toyc.token import TokenType
@@ -63,28 +69,28 @@ async def parse_source_code(request: ParserRequest) -> ParserResponse:
     try:
         ast = parse_code(request.source_code)
         ast_dict = ast.to_dict()
-        
+
         return ParserResponse(
             ast=ASTNodeResponse(type=ast_dict["type"], data=ast_dict),
             source_code=request.source_code,
-            success=True
+            success=True,
         )
-    
+
     except ParseError as e:
         return ParserResponse(
             ast=ASTNodeResponse(type="Error", data={}),
             source_code=request.source_code,
             success=False,
             error=e.message,
-            error_position=e.position
+            error_position=e.position,
         )
-    
+
     except Exception as e:
         return ParserResponse(
             ast=ASTNodeResponse(type="Error", data={}),
             source_code=request.source_code,
             success=False,
-            error=f"Unexpected error: {str(e)}"
+            error=f"Unexpected error: {str(e)}",
         )
 
 
@@ -93,15 +99,15 @@ async def trace_code(request: TraceRequest) -> TraceResponse:
     """Trace step-by-step compilation process."""
     try:
         result = trace_compilation(request.source_code)
-        
+
         if not result["success"]:
             return TraceResponse(
                 steps=[],
                 source_code=request.source_code,
                 success=False,
-                error=result.get("error", "Unknown error")
+                error=result.get("error", "Unknown error"),
             )
-        
+
         # Convert steps to TraceStep objects
         trace_steps = []
         for step in result["steps"]:
@@ -111,23 +117,23 @@ async def trace_code(request: TraceRequest) -> TraceResponse:
                     step_id=step["step_id"],
                     position=step.get("position"),
                     description=step["description"],
-                    state=step["state"]
+                    state=step["state"],
                 )
             )
-        
+
         return TraceResponse(
             steps=trace_steps,
             source_code=request.source_code,
             success=True,
             tokens=result.get("tokens"),
             ast=result.get("ast"),
-            analyzed_ast=result.get("analyzed_ast")
+            analyzed_ast=result.get("analyzed_ast"),
         )
-        
+
     except Exception as e:
         return TraceResponse(
             steps=[],
             source_code=request.source_code,
             success=False,
-            error=f"Unexpected error: {str(e)}"
+            error=f"Unexpected error: {str(e)}",
         )

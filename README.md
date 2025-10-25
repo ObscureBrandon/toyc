@@ -47,6 +47,7 @@ ToyC is a simple imperative programming language with the following features:
 ### Keywords
 
 - `if` - Conditional statement
+- `then` - Required after if condition
 - `else` - Alternative branch
 - `end` - Block terminator (not `{}`)
 - `repeat` - Start of repeat-until loop
@@ -64,7 +65,7 @@ total := x + 10;
 
 **Conditional (if-else):**
 ```
-if (x >= 3) read y; else write x % 2; end
+if (x >= 3) then read y; else write x % 2; end
 ```
 
 **Repeat-Until Loop:**
@@ -104,7 +105,7 @@ write x * 2;
 %% Initialize variable
 x := 5;
 { Check if x is greater than or equal to 3 }
-if (x >= 3)
+if (x >= 3) then
   read y;
 else
   write x % 2;  %% Output modulo result

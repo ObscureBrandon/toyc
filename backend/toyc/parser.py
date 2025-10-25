@@ -105,12 +105,13 @@ class Parser:
 
     def parse_if_statement(self) -> IfNode:
         """
-        IfStmt → IF LPAREN Expression RPAREN Block (ELSE Block)? END
+        IfStmt → IF LPAREN Expression RPAREN THEN Block (ELSE Block)? END
         """
         self.expect_token(TokenType.IF)
         self.expect_token(TokenType.LPAREN)
         condition = self.parse_expression()
         self.expect_token(TokenType.RPAREN)
+        self.expect_token(TokenType.THEN)
         
         then_branch = self.parse_block([TokenType.ELSE, TokenType.END])
         

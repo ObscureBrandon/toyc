@@ -46,6 +46,16 @@ const getNodeColor = (nodeType: string): string => {
       return '#06b6d4';
     case 'Int2Float':
       return '#ec4899';
+    case 'Block':
+      return '#6366f1';
+    case 'If':
+      return '#14b8a6';
+    case 'RepeatUntil':
+      return '#f97316';
+    case 'Read':
+      return '#22c55e';
+    case 'Write':
+      return '#a855f7';
     default:
       return '#6b7280';
   }
@@ -57,12 +67,13 @@ const AnalyzedASTNode = ({ data }: { data: FlowNode['data'] }) => {
       initial={{ opacity: 0, scale: 0 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.3 }}
-      className="px-3 py-2 rounded-lg border-2 text-white font-bold text-sm text-center min-w-[80px] relative"
+      className="px-3 rounded-lg border-2 text-white font-bold text-sm text-center min-w-[80px] relative flex items-center justify-center"
       style={{
         backgroundColor: getNodeColor(data.nodeType),
         borderColor: data.isCoercion ? '#fbbf24' : '#374151',
         borderWidth: data.isCoercion ? '3px' : '2px',
         boxShadow: data.isCoercion ? '0 0 10px rgba(251, 191, 36, 0.5)' : 'none',
+        height: '50px',
       }}
     >
       <Handle
@@ -134,6 +145,9 @@ export function AnalyzedASTVisualizer({ analyzedAst }: AnalyzedASTVisualizerProp
         if (child.type === 'Number') {
           childLabel = `${child.value}`;
           outputLabel = `${child.value}.0`;
+        } else if (child.type === 'Identifier' && 'name' in child) {
+          childLabel = child.name as string;
+          outputLabel = `${child.name} (Float)`;
         } else if (child.type === 'BinaryOp') {
           childLabel = 'expr';
           outputLabel = 'result';
@@ -153,7 +167,7 @@ export function AnalyzedASTVisualizer({ analyzedAst }: AnalyzedASTVisualizerProp
           },
           draggable: false,
           width: 80,
-          height: 40,
+          height: 50,
         });
 
         if (parentId) {
@@ -180,7 +194,7 @@ export function AnalyzedASTVisualizer({ analyzedAst }: AnalyzedASTVisualizerProp
           },
           draggable: false,
           width: childLabel === 'expr' ? 120 : 110,
-          height: 40,
+          height: 50,
         });
 
         flowEdges.push({
@@ -215,7 +229,7 @@ export function AnalyzedASTVisualizer({ analyzedAst }: AnalyzedASTVisualizerProp
           label = 'Program';
           break;
         case 'Assignment':
-          label = `${astNode.identifier || 'unknown'} =`;
+          label = `${astNode.identifier || 'unknown'} :=`;
           break;
         case 'BinaryOp':
           label = astNode.operator || '?';
@@ -233,6 +247,21 @@ export function AnalyzedASTVisualizer({ analyzedAst }: AnalyzedASTVisualizerProp
           label = astNode.name || 'unknown';
           value = astNode.name;
           break;
+        case 'Block':
+          label = 'Block';
+          break;
+        case 'If':
+          label = 'if';
+          break;
+        case 'RepeatUntil':
+          label = 'repeat-until';
+          break;
+        case 'Read':
+          label = `read ${astNode.identifier || '?'}`;
+          break;
+        case 'Write':
+          label = 'write';
+          break;
       }
 
       flowNodes.push({
@@ -247,7 +276,7 @@ export function AnalyzedASTVisualizer({ analyzedAst }: AnalyzedASTVisualizerProp
         },
         draggable: false,
         width: 80,
-        height: 40,
+        height: 50,
       });
 
       if (parentId) {
@@ -273,6 +302,29 @@ export function AnalyzedASTVisualizer({ analyzedAst }: AnalyzedASTVisualizerProp
         (astNode.statements as ASTNode[]).forEach((stmt: ASTNode) => {
           buildFlowNodes(stmt, currentId);
         });
+      } else if (astNode.type === 'Block' && 'statements' in astNode && Array.isArray(astNode.statements)) {
+        (astNode.statements as ASTNode[]).forEach((stmt: ASTNode) => {
+          buildFlowNodes(stmt, currentId);
+        });
+      } else if (astNode.type === 'If') {
+        if ('condition' in astNode && astNode.condition) {
+          buildFlowNodes(astNode.condition as ASTNode, currentId);
+        }
+        if ('then_branch' in astNode && astNode.then_branch) {
+          buildFlowNodes(astNode.then_branch as ASTNode, currentId);
+        }
+        if ('else_branch' in astNode && astNode.else_branch) {
+          buildFlowNodes(astNode.else_branch as ASTNode, currentId);
+        }
+      } else if (astNode.type === 'RepeatUntil') {
+        if ('body' in astNode && astNode.body) {
+          buildFlowNodes(astNode.body as ASTNode, currentId);
+        }
+        if ('condition' in astNode && astNode.condition) {
+          buildFlowNodes(astNode.condition as ASTNode, currentId);
+        }
+      } else if (astNode.type === 'Write' && 'expression' in astNode && astNode.expression) {
+        buildFlowNodes(astNode.expression as ASTNode, currentId);
       }
 
       return currentId;
@@ -300,16 +352,22 @@ export function AnalyzedASTVisualizer({ analyzedAst }: AnalyzedASTVisualizerProp
         const childCount = childEdges.length;
         
         if (childCount > 0) {
-          const childWidth = width / childCount;
+          // Ensure minimum spacing per child to prevent clustering
+          const minSpacingPerChild = 250;
+          const requiredWidth = Math.max(width, childCount * minSpacingPerChild);
+          const childWidth = requiredWidth / childCount;
+          
           childEdges.forEach((edge, index) => {
-            const childX = x + (index * childWidth) + (childWidth / 2) - (width / 2);
-            const childY = y + 120;
+            const childX = x + (index * childWidth) + (childWidth / 2) - (requiredWidth / 2);
+            const childY = y + 150; // Increased vertical spacing
             positionSubtree(edge.target, childX, childY, childWidth);
           });
         }
       };
       
-      positionSubtree(rootNode.id, 400, 50, 800);
+      // Calculate initial width based on tree complexity
+      const maxWidth = Math.max(1600, nodes.length * 150);
+      positionSubtree(rootNode.id, maxWidth / 2, 50, maxWidth);
       return layoutedNodes;
     };
 

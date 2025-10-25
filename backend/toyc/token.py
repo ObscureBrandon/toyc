@@ -31,6 +31,7 @@ class TokenType(str, Enum):
     IDENTIFIER = "IDENTIFIER"
 
     IF = "IF"
+    THEN = "THEN"
     ELSE = "ELSE"
     END = "END"
     REPEAT = "REPEAT"
@@ -53,6 +54,7 @@ class Token:
 
 KEYWORDS = {
     "if": TokenType.IF,
+    "then": TokenType.THEN,
     "else": TokenType.ELSE,
     "end": TokenType.END,
     "repeat": TokenType.REPEAT,

@@ -44,6 +44,16 @@ const getNodeColor = (nodeType: string): string => {
       return '#8b5cf6'; // violet
     case 'Identifier':
       return '#ef4444'; // red
+    case 'Block':
+      return '#6366f1'; // indigo
+    case 'If':
+      return '#14b8a6'; // teal
+    case 'RepeatUntil':
+      return '#f97316'; // orange
+    case 'Read':
+      return '#22c55e'; // green
+    case 'Write':
+      return '#a855f7'; // purple
     default:
       return '#6b7280'; // gray
   }
@@ -84,6 +94,21 @@ const convertASTToFlow = (ast: ASTNode): { nodes: FlowNode[]; edges: Edge[] } =>
         label = node.name || 'id';
         value = node.name;
         break;
+      case 'Block':
+        label = 'Block';
+        break;
+      case 'If':
+        label = 'if';
+        break;
+      case 'RepeatUntil':
+        label = 'repeat-until';
+        break;
+      case 'Read':
+        label = `read ${node.identifier}`;
+        break;
+      case 'Write':
+        label = 'write';
+        break;
     }
 
     // Add node
@@ -106,6 +131,10 @@ const convertASTToFlow = (ast: ASTNode): { nodes: FlowNode[]; edges: Edge[] } =>
         fontWeight: 'bold',
         minWidth: '80px',
         textAlign: 'center',
+        height: '50px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
       },
     });
 
@@ -131,6 +160,17 @@ const convertASTToFlow = (ast: ASTNode): { nodes: FlowNode[]; edges: Edge[] } =>
     } else if (node.value && typeof node.value === 'object') {
       // Assignment value
       traverse(node.value, currentId);
+    } else if (node.type === 'If') {
+      if (node.condition) traverse(node.condition, currentId);
+      if (node.then_branch) traverse(node.then_branch, currentId);
+      if (node.else_branch) traverse(node.else_branch, currentId);
+    } else if (node.type === 'RepeatUntil') {
+      if (node.body) traverse(node.body, currentId);
+      if (node.condition) traverse(node.condition, currentId);
+    } else if (node.type === 'Block' && node.statements && Array.isArray(node.statements)) {
+      (node.statements as ASTNode[]).forEach((stmt: ASTNode) => traverse(stmt, currentId));
+    } else if (node.type === 'Write' && node.expression) {
+      traverse(node.expression, currentId);
     }
 
     return currentId;
@@ -140,18 +180,56 @@ const convertASTToFlow = (ast: ASTNode): { nodes: FlowNode[]; edges: Edge[] } =>
   return { nodes, edges };
 };
 
-// Auto-layout nodes using dagre
+// Auto-layout nodes using tree layout algorithm
 const getLayoutedElements = (nodes: FlowNode[], edges: Edge[]) => {
-  // Simple fallback layout without dagre for now
-  const layoutedNodes = nodes.map((node, index) => {
-    return {
-      ...node,
-      position: {
-        x: (index % 3) * 150 + 100, // Simple grid layout
-        y: Math.floor(index / 3) * 100 + 50,
-      },
-    };
-  });
+  // Find root node (no incoming edges)
+  const rootNode = nodes.find(node => 
+    !edges.some(edge => edge.target === node.id)
+  );
+  
+  if (!rootNode) {
+    // Fallback to simple grid layout if no root found
+    const layoutedNodes = nodes.map((node, index) => {
+      return {
+        ...node,
+        position: {
+          x: (index % 3) * 150 + 100,
+          y: Math.floor(index / 3) * 100 + 50,
+        },
+      };
+    });
+    return { nodes: layoutedNodes, edges };
+  }
+
+  const layoutedNodes = [...nodes];
+  
+  const positionSubtree = (nodeId: string, x: number, y: number, width: number) => {
+    const node = layoutedNodes.find(n => n.id === nodeId);
+    if (!node) return;
+    
+    // Center the node within its allocated width
+    node.position = { x: x - 40, y };
+    
+    const childEdges = edges.filter(e => e.source === nodeId);
+    const childCount = childEdges.length;
+    
+    if (childCount > 0) {
+      // Ensure minimum spacing per child to prevent clustering
+      const minSpacingPerChild = 250;
+      const requiredWidth = Math.max(width, childCount * minSpacingPerChild);
+      const childWidth = requiredWidth / childCount;
+      
+      childEdges.forEach((edge, index) => {
+        const childX = x + (index * childWidth) + (childWidth / 2) - (requiredWidth / 2);
+        const childY = y + 150; // Increased vertical spacing
+        positionSubtree(edge.target, childX, childY, childWidth);
+      });
+    }
+  };
+  
+  // Calculate initial width based on tree complexity
+  const maxWidth = Math.max(1600, nodes.length * 150);
+  positionSubtree(rootNode.id, maxWidth / 2, 50, maxWidth);
 
   return { nodes: layoutedNodes, edges };
 };
