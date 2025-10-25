@@ -11,6 +11,109 @@ toyc/
 └── main.py          # Original REPL (for reference)
 ```
 
+## ToyC Language Syntax
+
+ToyC is a simple imperative programming language with the following features:
+
+### Data Types
+- **Integer**: `42`, `-15`, `0`
+- **Float**: `3.14`, `-0.5`, `2.0`
+- **Identifier**: Variable names like `x`, `count`, `total_sum`
+
+### Operators
+
+**Arithmetic:**
+- `+` - Addition
+- `-` - Subtraction
+- `*` - Multiplication
+- `/` - Division
+- `%` - Modulo
+
+**Comparison:**
+- `<` - Less than
+- `>` - Greater than
+- `<=` - Less than or equal
+- `>=` - Greater than or equal
+- `==` - Equal to
+- `!=` - Not equal to
+
+**Logical:**
+- `&&` - Logical AND
+- `||` - Logical OR
+
+**Assignment:**
+- `:=` - Assignment operator (not `=`)
+
+### Keywords
+
+- `if` - Conditional statement
+- `else` - Alternative branch
+- `end` - Block terminator (not `{}`)
+- `repeat` - Start of repeat-until loop
+- `until` - End condition for repeat loop
+- `read` - Input statement
+- `write` - Output statement
+
+### Statements
+
+**Assignment:**
+```
+x := 5;
+total := x + 10;
+```
+
+**Conditional (if-else):**
+```
+if (x >= 3) read y; else write x % 2; end
+```
+
+**Repeat-Until Loop:**
+```
+repeat
+  z := z + 1;
+until z != 10;
+```
+
+**Input/Output:**
+```
+read x;
+write x * 2;
+```
+
+### Syntax Rules
+
+1. **Semicolons (`;`)**: Required to terminate statements
+2. **Block Delimiters**: Use `end` keyword (NOT curly braces)
+3. **Comments**: 
+   - **Single-line**: `%% comment text` (skips rest of line)
+   - **Multi-line**: `{ comment text }` (can span multiple lines)
+   ```
+   %% This is a single-line comment
+   x := 10 % 3;  { inline multi-line comment }
+   { 
+     Multi-line comment
+     spanning multiple lines
+   }
+   ```
+4. **Parentheses**: Required around conditions in `if` statements
+5. **Assignment**: Always use `:=` (not `=`)
+
+### Example Program
+
+```
+%% Initialize variable
+x := 5;
+{ Check if x is greater than or equal to 3 }
+if (x >= 3)
+  read y;
+else
+  write x % 2;  %% Output modulo result
+end
+repeat
+  z := z + 1;
+until z != 10;
+```
+
 ## Backend (Python + FastAPI)
 
 Located in `backend/` directory.

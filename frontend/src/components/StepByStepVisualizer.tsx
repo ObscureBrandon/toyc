@@ -14,7 +14,7 @@ interface StepByStepVisualizerProps {
 }
 
 export function StepByStepVisualizer({
-  initialCode = "x = 2.0 + 5 * 3 / 10.2\ny = (1.2 + 3) * 67",
+  initialCode = "%% Calculate modulo\nx := 10 % 3; { this is x mod 3 }\nif (x == 0) then\n\twrite x;\nelse\n\twrite x - 6.7;\nend\nrepeat\n\tz := z + 1;\nuntil z != 10;",
 }: StepByStepVisualizerProps) {
   const [sourceCode, setSourceCode] = useState(initialCode);
   const [traceData, setTraceData] = useState<TraceResponse | null>(null);

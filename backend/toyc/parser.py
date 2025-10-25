@@ -63,10 +63,10 @@ class Parser:
         """
         Statement → Assignment | Expression
         """
-        # Look ahead for assignment: IDENTIFIER = ...
+        # Look ahead for assignment: IDENTIFIER := ...
         if (
             self.current_token.type == TokenType.IDENTIFIER
-            and self.peek_token.type == TokenType.EQUAL
+            and self.peek_token.type == TokenType.ASSIGN
         ):
             return self.parse_assignment()
         else:
@@ -74,10 +74,10 @@ class Parser:
 
     def parse_assignment(self) -> AssignmentNode:
         """
-        Assignment → IDENTIFIER "=" Expression
+        Assignment → IDENTIFIER ":=" Expression
         """
         identifier_token = self.expect_token(TokenType.IDENTIFIER)
-        self.expect_token(TokenType.EQUAL)
+        self.expect_token(TokenType.ASSIGN)
         value = self.parse_expression()
 
         return AssignmentNode(identifier_token.literal, value)
@@ -115,6 +115,11 @@ class Parser:
         Factor → NUMBER | FLOAT | IDENTIFIER | LPAREN Expression RPAREN
         """
         token = self.current_token
+        if token is None:
+            raise ParseError(
+                "Unexpected end of input while parsing factor",
+                self.position,
+            )
 
         if token.type == TokenType.NUMBER:
             self.advance()
@@ -148,4 +153,3 @@ def parse_code(source_code: str) -> ProgramNode:
     lexer = Lexer(source_code)
     parser = Parser(lexer)
     return parser.parse_program()
-

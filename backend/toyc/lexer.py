@@ -1,4 +1,4 @@
-from .token import Token, TokenType
+from .token import Token, TokenType, lookup_identifier
 
 
 class Lexer:
@@ -18,19 +18,38 @@ class Lexer:
         self.position = self.read_position
         self.read_position += 1
 
-    def skip_whitespace(self):
-        while self.ch in " \t\n\r":
-            self.read_char()
-
     def _new_token(self, type: TokenType, literal: str) -> Token:
         token = Token(type, literal)
         return token
+
+    def is_whitespace(self, ch: str) -> bool:
+        return ch in " \t\n\r"
+
+    def skip_whitespace(self):
+        while self.is_whitespace(self.ch):
+            self.read_char()
+
+    def skip_single_line_comment(self):
+        while self.ch != "\n" and self.ch != "\0":
+            self.read_char()
+
+    def skip_multi_line_comment(self):
+        while self.ch != "}" and self.ch != "\0":
+            self.read_char()
+        if self.ch == "}":
+            self.read_char()
 
     def is_letter(self, ch: str) -> bool:
         return ("a" <= ch and ch <= "z") or ("A" <= ch and ch <= "Z") or ch == "_"
 
     def is_digit(self, ch: str) -> bool:
         return "0" <= ch and ch <= "9"
+
+    def peek_char(self) -> str:
+        if self.read_position >= len(self.input):
+            return "\0"
+        else:
+            return self.input[self.read_position]
 
     def read_identifier(self) -> str:
         start_position = self.position
@@ -61,14 +80,83 @@ class Lexer:
                 token = self._new_token(TokenType.LPAREN, self.ch)
             case ")":
                 token = self._new_token(TokenType.RPAREN, self.ch)
+            case ";":
+                token = self._new_token(TokenType.SEMICOLON, self.ch)
+            case "%":
+                if self.peek_char() == "%":
+                    self.read_char()
+                    self.read_char()
+                    self.skip_single_line_comment()
+                    return self.next_token()
+                else:
+                    token = self._new_token(TokenType.PERCENT, self.ch)
+            case "{":
+                self.read_char()
+                self.skip_multi_line_comment()
+                return self.next_token()
+            case ":":
+                if self.peek_char() == "=":
+                    ch = self.ch
+                    self.read_char()
+                    literal = ch + self.ch
+                    token = self._new_token(TokenType.ASSIGN, literal)
+                else:
+                    token = self._new_token(TokenType.ILLEGAL, self.ch)
+            case "<":
+                if self.peek_char() == "=":
+                    ch = self.ch
+                    self.read_char()
+                    literal = ch + self.ch
+                    token = self._new_token(TokenType.LT_EQ, literal)
+                else:
+                    token = self._new_token(TokenType.LT, self.ch)
+            case ">":
+                if self.peek_char() == "=":
+                    ch = self.ch
+                    self.read_char()
+                    literal = ch + self.ch
+                    token = self._new_token(TokenType.GT_EQ, literal)
+                else:
+                    token = self._new_token(TokenType.GT, self.ch)
             case "=":
-                token = self._new_token(TokenType.EQUAL, self.ch)
+                if self.peek_char() == "=":
+                    ch = self.ch
+                    self.read_char()
+                    literal = ch + self.ch
+                    token = self._new_token(TokenType.EQ, literal)
+                else:
+                    token = self._new_token(TokenType.ILLEGAL, self.ch)
+            case "!":
+                if self.peek_char() == "=":
+                    ch = self.ch
+                    self.read_char()
+                    literal = ch + self.ch
+                    token = self._new_token(TokenType.NEQ, literal)
+                else:
+                    token = self._new_token(TokenType.ILLEGAL, self.ch)
+            case "&":
+                if self.peek_char() == "&":
+                    ch = self.ch
+                    self.read_char()
+                    literal = ch + self.ch
+                    token = self._new_token(TokenType.AND, literal)
+                else:
+                    token = self._new_token(TokenType.ILLEGAL, self.ch)
+            case "|":
+                if self.peek_char() == "|":
+                    ch = self.ch
+                    self.read_char()
+                    literal = ch + self.ch
+                    token = self._new_token(TokenType.OR, literal)
+                else:
+                    token = self._new_token(TokenType.ILLEGAL, self.ch)
             case "\0":
                 token = self._new_token(TokenType.EOF, "")
             case _:
                 if self.is_letter(self.ch):
                     literal = self.read_identifier()
-                    token = self._new_token(TokenType.IDENTIFIER, literal)
+                    token_type = lookup_identifier(literal)
+                    token = self._new_token(token_type, literal)
                     return token
                 elif self.is_digit(self.ch):
                     literal = self.read_number()
@@ -85,4 +173,3 @@ class Lexer:
 
         self.read_char()
         return token
-

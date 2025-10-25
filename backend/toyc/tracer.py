@@ -1,7 +1,7 @@
 import traceback
 
 from .lexer import Lexer
-from .token import Token, TokenType
+from .token import Token, TokenType, lookup_identifier
 from .ast import (
     ASTNode,
     ProgramNode,
@@ -13,7 +13,7 @@ from .ast import (
     Int2FloatNode,
     ParseError,
 )
-from .semantic_analyzer import SemanticAnalyzer, NodeType
+from .semantic_analyzer import SemanticAnalyzer
 
 
 class TracingLexer(Lexer):
@@ -37,15 +37,51 @@ class TracingLexer(Lexer):
         )
         self.step_id += 1
 
+    def skip_single_line_comment(self):
+        """Skip single-line comment with tracing"""
+        comment_start = self.position - 2
+        comment_content = ""
+        while self.ch != "\n" and self.ch != "\0":
+            comment_content += self.ch
+            self.read_char()
+        self.trace_step(
+            f"Skipped single-line comment: '%%{comment_content}'",
+            {
+                "comment_type": "single_line",
+                "comment_start": comment_start,
+                "comment_content": comment_content,
+                "action": "skip_comment",
+            },
+        )
+
+    def skip_multi_line_comment(self):
+        """Skip multi-line comment with tracing"""
+        comment_start = self.position - 1
+        comment_content = ""
+        while self.ch != "}" and self.ch != "\0":
+            comment_content += self.ch
+            self.read_char()
+        if self.ch == "}":
+            self.read_char()
+        self.trace_step(
+            f"Skipped multi-line comment: '{{{comment_content}}}'",
+            {
+                "comment_type": "multi_line",
+                "comment_start": comment_start,
+                "comment_content": comment_content,
+                "action": "skip_comment",
+            },
+        )
+
     def read_char(self):
         # Just read the character without verbose tracing
         super().read_char()
-    
+
     def read_identifier(self) -> str:
         """Read identifier with incremental tracing"""
         start_position = self.position
         current_lexeme = ""
-        
+
         while self.ch.isalpha():
             current_lexeme += self.ch
             self.trace_step(
@@ -54,18 +90,18 @@ class TracingLexer(Lexer):
                     "current_char": self.ch,
                     "current_lexeme": current_lexeme,
                     "action": "build_token",
-                    "token_type": "IDENTIFIER"
-                }
+                    "token_type": "IDENTIFIER",
+                },
             )
             self.read_char()
-        
+
         return self.input[start_position : self.position]
-    
+
     def read_number(self) -> str:
         """Read number with incremental tracing"""
         start_position = self.position
         current_lexeme = ""
-        
+
         while self.ch.isdigit():
             current_lexeme += self.ch
             self.trace_step(
@@ -74,11 +110,11 @@ class TracingLexer(Lexer):
                     "current_char": self.ch,
                     "current_lexeme": current_lexeme,
                     "action": "build_token",
-                    "token_type": "NUMBER"
-                }
+                    "token_type": "NUMBER",
+                },
             )
             self.read_char()
-        
+
         return self.input[start_position : self.position]
 
     def next_token(self) -> Token:
@@ -95,63 +131,422 @@ class TracingLexer(Lexer):
         if self.ch == "+":
             self.trace_step(
                 f"Creating PLUS token at position {start_position}",
-                {"current_char": self.ch, "action": "identify_token", "token_type": "PLUS"},
+                {
+                    "current_char": self.ch,
+                    "action": "identify_token",
+                    "token_type": "PLUS",
+                },
             )
             token = self._new_token(TokenType.PLUS, self.ch)
         elif self.ch == "-":
             self.trace_step(
                 f"Creating MINUS token at position {start_position}",
-                {"current_char": self.ch, "action": "identify_token", "token_type": "MINUS"},
+                {
+                    "current_char": self.ch,
+                    "action": "identify_token",
+                    "token_type": "MINUS",
+                },
             )
             token = self._new_token(TokenType.MINUS, self.ch)
         elif self.ch == "*":
             self.trace_step(
                 f"Creating ASTERISK token at position {start_position}",
-                {"current_char": self.ch, "action": "identify_token", "token_type": "ASTERISK"},
+                {
+                    "current_char": self.ch,
+                    "action": "identify_token",
+                    "token_type": "ASTERISK",
+                },
             )
             token = self._new_token(TokenType.ASTERISK, self.ch)
         elif self.ch == "/":
             self.trace_step(
                 f"Creating SLASH token at position {start_position}",
-                {"current_char": self.ch, "action": "identify_token", "token_type": "SLASH"},
+                {
+                    "current_char": self.ch,
+                    "action": "identify_token",
+                    "token_type": "SLASH",
+                },
             )
             token = self._new_token(TokenType.SLASH, self.ch)
         elif self.ch == "(":
             self.trace_step(
                 f"Creating LPAREN token at position {start_position}",
-                {"current_char": self.ch, "action": "identify_token", "token_type": "LPAREN"},
+                {
+                    "current_char": self.ch,
+                    "action": "identify_token",
+                    "token_type": "LPAREN",
+                },
             )
             token = self._new_token(TokenType.LPAREN, self.ch)
         elif self.ch == ")":
             self.trace_step(
                 f"Creating RPAREN token at position {start_position}",
-                {"current_char": self.ch, "action": "identify_token", "token_type": "RPAREN"},
+                {
+                    "current_char": self.ch,
+                    "action": "identify_token",
+                    "token_type": "RPAREN",
+                },
             )
             token = self._new_token(TokenType.RPAREN, self.ch)
+        elif self.ch == ":":
+            if self.peek_char() == "=":
+                self.trace_step(
+                    f"Creating ASSIGN token at position {start_position}",
+                    {
+                        "current_char": self.ch,
+                        "action": "identify_token",
+                        "token_type": "ASSIGN",
+                    },
+                )
+                self.read_char()
+                token = self._new_token(TokenType.ASSIGN, ":=")
+                self.read_char()
+                self.trace_step(
+                    f"Created ASSIGN token: ':='",
+                    {
+                        "token_type": "ASSIGN",
+                        "literal": ":=",
+                        "action": "token_created",
+                    },
+                )
+                return token
+            else:
+                token = self._new_token(TokenType.ILLEGAL, self.ch)
+        elif self.ch == "<":
+            if self.peek_char() == "=":
+                self.trace_step(
+                    f"Creating LT_EQ token at position {start_position}",
+                    {
+                        "current_char": self.ch,
+                        "action": "identify_token",
+                        "token_type": "LT_EQ",
+                    },
+                )
+                self.read_char()
+                token = self._new_token(TokenType.LT_EQ, "<=")
+                self.read_char()
+                self.trace_step(
+                    f"Created LT_EQ token: '<='",
+                    {
+                        "token_type": "LT_EQ",
+                        "literal": "<=",
+                        "action": "token_created",
+                    },
+                )
+                return token
+            else:
+                self.trace_step(
+                    f"Creating LT token at position {start_position}",
+                    {
+                        "current_char": self.ch,
+                        "action": "identify_token",
+                        "token_type": "LT",
+                    },
+                )
+                token = self._new_token(TokenType.LT, self.ch)
+        elif self.ch == ">":
+            if self.peek_char() == "=":
+                self.trace_step(
+                    f"Creating GT_EQ token at position {start_position}",
+                    {
+                        "current_char": self.ch,
+                        "action": "identify_token",
+                        "token_type": "GT_EQ",
+                    },
+                )
+                self.read_char()
+                token = self._new_token(TokenType.GT_EQ, ">=")
+                self.read_char()
+                self.trace_step(
+                    f"Created GT_EQ token: '>='",
+                    {
+                        "token_type": "GT_EQ",
+                        "literal": ">=",
+                        "action": "token_created",
+                    },
+                )
+                return token
+            else:
+                self.trace_step(
+                    f"Creating GT token at position {start_position}",
+                    {
+                        "current_char": self.ch,
+                        "action": "identify_token",
+                        "token_type": "GT",
+                    },
+                )
+                token = self._new_token(TokenType.GT, self.ch)
+        elif self.ch == ":":
+            if self.peek_char() == "=":
+                self.trace_step(
+                    f"Creating ASSIGN token at position {start_position}",
+                    {
+                        "current_char": self.ch,
+                        "action": "identify_token",
+                        "token_type": "ASSIGN",
+                    },
+                )
+                ch = self.ch
+                self.read_char()
+                literal = ch + self.ch
+                token = self._new_token(TokenType.ASSIGN, literal)
+                self.read_char()
+                self.trace_step(
+                    f"Created ASSIGN token: ':='",
+                    {
+                        "token_type": "ASSIGN",
+                        "literal": ":=",
+                        "action": "token_created",
+                    },
+                )
+                return token
+            else:
+                token = self._new_token(TokenType.ILLEGAL, self.ch)
+        elif self.ch == "<":
+            if self.peek_char() == "=":
+                self.trace_step(
+                    f"Creating LT_EQ token at position {start_position}",
+                    {
+                        "current_char": self.ch,
+                        "action": "identify_token",
+                        "token_type": "LT_EQ",
+                    },
+                )
+                ch = self.ch
+                self.read_char()
+                literal = ch + self.ch
+                token = self._new_token(TokenType.LT_EQ, literal)
+                self.read_char()
+                self.trace_step(
+                    f"Created LT_EQ token: '<='",
+                    {
+                        "token_type": "LT_EQ",
+                        "literal": "<=",
+                        "action": "token_created",
+                    },
+                )
+                return token
+            else:
+                self.trace_step(
+                    f"Creating LT token at position {start_position}",
+                    {
+                        "current_char": self.ch,
+                        "action": "identify_token",
+                        "token_type": "LT",
+                    },
+                )
+                token = self._new_token(TokenType.LT, self.ch)
+        elif self.ch == ">":
+            if self.peek_char() == "=":
+                self.trace_step(
+                    f"Creating GT_EQ token at position {start_position}",
+                    {
+                        "current_char": self.ch,
+                        "action": "identify_token",
+                        "token_type": "GT_EQ",
+                    },
+                )
+                ch = self.ch
+                self.read_char()
+                literal = ch + self.ch
+                token = self._new_token(TokenType.GT_EQ, literal)
+                self.read_char()
+                self.trace_step(
+                    f"Created GT_EQ token: '>='",
+                    {
+                        "token_type": "GT_EQ",
+                        "literal": ">=",
+                        "action": "token_created",
+                    },
+                )
+                return token
+            else:
+                self.trace_step(
+                    f"Creating GT token at position {start_position}",
+                    {
+                        "current_char": self.ch,
+                        "action": "identify_token",
+                        "token_type": "GT",
+                    },
+                )
+                token = self._new_token(TokenType.GT, self.ch)
         elif self.ch == "=":
+            if self.peek_char() == "=":
+                self.trace_step(
+                    f"Creating EQ token at position {start_position}",
+                    {
+                        "current_char": self.ch,
+                        "action": "identify_token",
+                        "token_type": "EQ",
+                    },
+                )
+                ch = self.ch
+                self.read_char()
+                literal = ch + self.ch
+                token = self._new_token(TokenType.EQ, literal)
+                self.read_char()
+                self.trace_step(
+                    f"Created EQ token: '=='",
+                    {
+                        "token_type": "EQ",
+                        "literal": "==",
+                        "action": "token_created",
+                    },
+                )
+                return token
+            else:
+                token = self._new_token(TokenType.ILLEGAL, self.ch)
+        elif self.ch == "!":
+            if self.peek_char() == "=":
+                self.trace_step(
+                    f"Creating NEQ token at position {start_position}",
+                    {
+                        "current_char": self.ch,
+                        "action": "identify_token",
+                        "token_type": "NEQ",
+                    },
+                )
+                ch = self.ch
+                self.read_char()
+                literal = ch + self.ch
+                token = self._new_token(TokenType.NEQ, literal)
+                self.read_char()
+                self.trace_step(
+                    f"Created NEQ token: '!='",
+                    {
+                        "token_type": "NEQ",
+                        "literal": "!=",
+                        "action": "token_created",
+                    },
+                )
+                return token
+            else:
+                token = self._new_token(TokenType.ILLEGAL, self.ch)
+        elif self.ch == "&":
+            if self.peek_char() == "&":
+                self.trace_step(
+                    f"Creating AND token at position {start_position}",
+                    {
+                        "current_char": self.ch,
+                        "action": "identify_token",
+                        "token_type": "AND",
+                    },
+                )
+                ch = self.ch
+                self.read_char()
+                literal = ch + self.ch
+                token = self._new_token(TokenType.AND, literal)
+                self.read_char()
+                self.trace_step(
+                    f"Created AND token: '&&'",
+                    {
+                        "token_type": "AND",
+                        "literal": "&&",
+                        "action": "token_created",
+                    },
+                )
+                return token
+            else:
+                token = self._new_token(TokenType.ILLEGAL, self.ch)
+        elif self.ch == "|":
+            if self.peek_char() == "|":
+                self.trace_step(
+                    f"Creating OR token at position {start_position}",
+                    {
+                        "current_char": self.ch,
+                        "action": "identify_token",
+                        "token_type": "OR",
+                    },
+                )
+                ch = self.ch
+                self.read_char()
+                literal = ch + self.ch
+                token = self._new_token(TokenType.OR, literal)
+                self.read_char()
+                self.trace_step(
+                    f"Created OR token: '||'",
+                    {
+                        "token_type": "OR",
+                        "literal": "||",
+                        "action": "token_created",
+                    },
+                )
+                return token
+            else:
+                token = self._new_token(TokenType.ILLEGAL, self.ch)
+        elif self.ch == ";":
             self.trace_step(
-                f"Creating EQUAL token at position {start_position}",
-                {"current_char": self.ch, "action": "identify_token", "token_type": "EQUAL"},
+                f"Creating SEMICOLON token at position {start_position}",
+                {
+                    "current_char": self.ch,
+                    "action": "identify_token",
+                    "token_type": "SEMICOLON",
+                },
             )
-            token = self._new_token(TokenType.EQUAL, self.ch)
+            token = self._new_token(TokenType.SEMICOLON, self.ch)
+        elif self.ch == "%":
+            if self.peek_char() == "%":
+                self.trace_step(
+                    f"Found single-line comment at position {start_position}",
+                    {
+                        "current_char": self.ch,
+                        "action": "identify_comment",
+                        "comment_type": "single_line",
+                    },
+                )
+                self.read_char()
+                self.read_char()
+                self.skip_single_line_comment()
+                return self.next_token()
+            else:
+                self.trace_step(
+                    f"Creating PERCENT token at position {start_position}",
+                    {
+                        "current_char": self.ch,
+                        "action": "identify_token",
+                        "token_type": "PERCENT",
+                    },
+                )
+                token = self._new_token(TokenType.PERCENT, self.ch)
+        elif self.ch == "{":
+            self.trace_step(
+                f"Found multi-line comment at position {start_position}",
+                {
+                    "current_char": self.ch,
+                    "action": "identify_comment",
+                    "comment_type": "multi_line",
+                },
+            )
+            self.read_char()
+            self.skip_multi_line_comment()
+            return self.next_token()
         elif self.ch == "\0":
             self.trace_step(
                 f"Creating EOF token at position {start_position}",
-                {"current_char": self.ch, "action": "identify_token", "token_type": "EOF"},
+                {
+                    "current_char": self.ch,
+                    "action": "identify_token",
+                    "token_type": "EOF",
+                },
             )
             token = self._new_token(TokenType.EOF, "")
         elif self.is_letter(self.ch):
             self.trace_step(
-                f"Creating IDENTIFIER token at position {start_position}",
-                {"current_char": self.ch, "action": "identify_token", "token_type": "IDENTIFIER"},
+                f"Creating IDENTIFIER/KEYWORD token at position {start_position}",
+                {
+                    "current_char": self.ch,
+                    "action": "identify_token",
+                    "token_type": "IDENTIFIER/KEYWORD",
+                },
             )
             literal = self.read_identifier()
-            token = self._new_token(TokenType.IDENTIFIER, literal)
+            token_type = lookup_identifier(literal)
+            token = self._new_token(token_type, literal)
             # Don't advance here since read_identifier already did
             self.trace_step(
-                f"Created IDENTIFIER token: '{literal}'",
+                f"Created {token_type.name} token: '{literal}'",
                 {
-                    "token_type": "IDENTIFIER",
+                    "token_type": token_type.name,
                     "literal": literal,
                     "action": "token_created",
                 },
@@ -160,35 +555,47 @@ class TracingLexer(Lexer):
         elif self.is_digit(self.ch):
             self.trace_step(
                 f"Creating NUMBER token at position {start_position}",
-                {"current_char": self.ch, "action": "identify_token", "token_type": "NUMBER"},
+                {
+                    "current_char": self.ch,
+                    "action": "identify_token",
+                    "token_type": "NUMBER",
+                },
             )
             literal = self.read_number()
-            
+
             # Check for decimal point to create FLOAT token
             if self.ch == ".":
                 self.trace_step(
-                    f"Found decimal point, converting to FLOAT token",
-                    {"current_char": self.ch, "action": "detect_decimal", "current_lexeme": literal},
+                    "Found decimal point, converting to FLOAT token",
+                    {
+                        "current_char": self.ch,
+                        "action": "detect_decimal",
+                        "current_lexeme": literal,
+                    },
                 )
                 literal += "."
                 self.read_char()  # consume the '.'
-                
+
                 # Read fractional part
                 fractional_start = len(literal)
                 fractional = self.read_number()
                 literal += fractional
-                
+
                 token = self._new_token(TokenType.FLOAT, literal)
                 token_type = "FLOAT"
-                
+
                 self.trace_step(
                     f"Built complete FLOAT: '{literal}'",
-                    {"current_lexeme": literal, "action": "complete_float", "token_type": "FLOAT"},
+                    {
+                        "current_lexeme": literal,
+                        "action": "complete_float",
+                        "token_type": "FLOAT",
+                    },
                 )
             else:
                 token = self._new_token(TokenType.NUMBER, literal)
                 token_type = "NUMBER"
-            
+
             # Don't advance here since read_number already did
             self.trace_step(
                 f"Created {token_type} token: '{literal}'",
@@ -202,12 +609,16 @@ class TracingLexer(Lexer):
         else:
             self.trace_step(
                 f"Creating ILLEGAL token at position {start_position}",
-                {"current_char": self.ch, "action": "identify_token", "token_type": "ILLEGAL"},
+                {
+                    "current_char": self.ch,
+                    "action": "identify_token",
+                    "token_type": "ILLEGAL",
+                },
             )
             token = self._new_token(TokenType.ILLEGAL, self.ch)
 
         self.read_char()
-        
+
         # Record token creation
         self.trace_step(
             f"Created {token.type.name} token: '{token.literal}'",
@@ -256,7 +667,13 @@ class TracingParser:
         self.node_id_counter += 1
         return f"node_{self.node_id_counter}"
 
-    def trace_ast_node_creation(self, description: str, node: ASTNode, node_id: str, parent_id: str | None = None):
+    def trace_ast_node_creation(
+        self,
+        description: str,
+        node: ASTNode,
+        node_id: str,
+        parent_id: str | None = None,
+    ):
         """Record AST node creation with full node data and relationships"""
         self.trace_step(
             description,
@@ -266,7 +683,7 @@ class TracingParser:
                 "parent_id": parent_id,
                 "ast_node": node.to_dict(),
                 "node_type": type(node).__name__,
-            }
+            },
         )
 
     def advance(self):
@@ -289,8 +706,12 @@ class TracingParser:
         self.trace_step(
             f"Now at token: {self.current_token.type.name if self.current_token else 'None'} '{self.current_token.literal if self.current_token else ''}'",
             {
-                "current_token": self.current_token.type.name if self.current_token else None,
-                "current_literal": self.current_token.literal if self.current_token else None,
+                "current_token": self.current_token.type.name
+                if self.current_token
+                else None,
+                "current_literal": self.current_token.literal
+                if self.current_token
+                else None,
                 "peek_token": self.peek_token.type.name if self.peek_token else None,
                 "action": "token_advanced",
             },
@@ -336,14 +757,14 @@ class TracingParser:
 
         program = ProgramNode(statements)
         program_node_id = self.get_next_node_id()
-        
+
         self.trace_ast_node_creation(
             f"Created program node with {len(statements)} statements",
             program,
             program_node_id,
-            None
+            None,
         )
-        
+
         self.trace_step(
             f"Completed program with {len(statements)} statements",
             {"statement_count": len(statements), "action": "complete_program"},
@@ -355,15 +776,17 @@ class TracingParser:
         """Parse a statement (assignment or expression)"""
         # Check for assignment
         if (
-            self.current_token and self.current_token.type == TokenType.IDENTIFIER
-            and self.peek_token and self.peek_token.type == TokenType.EQUAL
+            self.current_token
+            and self.current_token.type == TokenType.IDENTIFIER
+            and self.peek_token
+            and self.peek_token.type == TokenType.ASSIGN
         ):
             self.trace_step(
-                f"Detected assignment: {self.current_token.literal} =",
+                f"Detected assignment: {self.current_token.literal} :=",
                 {
                     "identifier": self.current_token.literal,
                     "action": "detect_assignment",
-                    "grammar_rule": "Assignment → IDENTIFIER '=' Expression",
+                    "grammar_rule": "Assignment → IDENTIFIER ':=' Expression",
                 },
             )
             return self.parse_assignment()
@@ -380,7 +803,7 @@ class TracingParser:
     def parse_assignment(self) -> AssignmentNode:
         """Parse assignment statement"""
         identifier_token = self.current_token
-        
+
         if not identifier_token:
             raise ParseError("Expected identifier for assignment", self.position)
 
@@ -390,7 +813,7 @@ class TracingParser:
         )
 
         self.advance()  # consume identifier
-        self.advance()  # consume '='
+        self.advance()  # consume ':='
 
         # Push assignment node context for tracking children
         assignment_node_id = self.get_next_node_id()
@@ -404,10 +827,10 @@ class TracingParser:
         assignment = AssignmentNode(identifier_token.literal, value)
 
         self.trace_ast_node_creation(
-            f"Created assignment node: {identifier_token.literal} = ...",
+            f"Created assignment node: {identifier_token.literal} := ...",
             assignment,
             assignment_node_id,
-            self.node_stack[-1] if self.node_stack else None
+            self.node_stack[-1] if self.node_stack else None,
         )
 
         return assignment
@@ -424,10 +847,10 @@ class TracingParser:
 
         left = self.parse_term()
 
-        while (
-            self.current_token 
-            and self.current_token.type in [TokenType.PLUS, TokenType.MINUS]
-        ):
+        while self.current_token and self.current_token.type in [
+            TokenType.PLUS,
+            TokenType.MINUS,
+        ]:
             operator = self.current_token.literal
 
             self.trace_step(
@@ -440,13 +863,13 @@ class TracingParser:
             )
 
             self.advance()
-            
+
             # Push current node context for parent tracking
             binary_node_id = self.get_next_node_id()
             self.node_stack.append(binary_node_id)
-            
+
             right = self.parse_term()
-            
+
             # Pop the node context
             self.node_stack.pop()
 
@@ -456,7 +879,7 @@ class TracingParser:
                 f"Created binary operation node: ... {operator} ...",
                 left,
                 binary_node_id,
-                self.node_stack[-1] if self.node_stack else None
+                self.node_stack[-1] if self.node_stack else None,
             )
 
         return left
@@ -473,10 +896,10 @@ class TracingParser:
 
         left = self.parse_factor()
 
-        while (
-            self.current_token 
-            and self.current_token.type in [TokenType.ASTERISK, TokenType.SLASH]
-        ):
+        while self.current_token and self.current_token.type in [
+            TokenType.ASTERISK,
+            TokenType.SLASH,
+        ]:
             operator = self.current_token.literal
 
             self.trace_step(
@@ -489,13 +912,13 @@ class TracingParser:
             )
 
             self.advance()
-            
+
             # Push current node context for parent tracking
             term_node_id = self.get_next_node_id()
             self.node_stack.append(term_node_id)
-            
+
             right = self.parse_factor()
-            
+
             # Pop the node context
             self.node_stack.pop()
 
@@ -505,7 +928,7 @@ class TracingParser:
                 f"Created term operation node: ... {operator} ...",
                 left,
                 term_node_id,
-                self.node_stack[-1] if self.node_stack else None
+                self.node_stack[-1] if self.node_stack else None,
             )
 
         return left
@@ -513,7 +936,7 @@ class TracingParser:
     def parse_factor(self) -> ASTNode:
         """Parse factor (number, float, identifier, or parenthesized expression)"""
         token = self.current_token
-        
+
         if not token:
             raise ParseError("Unexpected end of input in factor", self.position)
 
@@ -536,7 +959,7 @@ class TracingParser:
                 f"Created number node: {token.literal}",
                 node,
                 node_id,
-                self.node_stack[-1] if self.node_stack else None
+                self.node_stack[-1] if self.node_stack else None,
             )
             return node
 
@@ -549,7 +972,7 @@ class TracingParser:
                 f"Created float node: {token.literal}",
                 node,
                 node_id,
-                self.node_stack[-1] if self.node_stack else None
+                self.node_stack[-1] if self.node_stack else None,
             )
             return node
 
@@ -562,7 +985,7 @@ class TracingParser:
                 f"Created identifier node: {token.literal}",
                 node,
                 node_id,
-                self.node_stack[-1] if self.node_stack else None
+                self.node_stack[-1] if self.node_stack else None,
             )
             return node
 
@@ -576,9 +999,7 @@ class TracingParser:
 
             if not self.current_token or self.current_token.type != TokenType.RPAREN:
                 current_type = self.current_token.type if self.current_token else "EOF"
-                raise ParseError(
-                    f"Expected ')', got {current_type}", self.position
-                )
+                raise ParseError(f"Expected ')', got {current_type}", self.position)
 
             self.advance()  # consume ')'
 
@@ -589,7 +1010,9 @@ class TracingParser:
             return expr
 
         else:
-            error_msg = f"Unexpected token in factor: {token.type.name} '{token.literal}'"
+            error_msg = (
+                f"Unexpected token in factor: {token.type.name} '{token.literal}'"
+            )
             self.trace_step(
                 error_msg,
                 {
@@ -639,7 +1062,7 @@ class TracingSemanticAnalyzer(SemanticAnalyzer):
         )
 
         new_statements = []
-        
+
         for i, statement in enumerate(ast.statements):
             self.trace_step(
                 f"Analyzing statement {i + 1} of {len(ast.statements)}",
@@ -651,7 +1074,7 @@ class TracingSemanticAnalyzer(SemanticAnalyzer):
             )
             analyzed_stmt = self.analyze_statement(statement)
             new_statements.append(analyzed_stmt)
-        
+
         self.trace_step(
             "Completed semantic analysis",
             {
@@ -659,7 +1082,7 @@ class TracingSemanticAnalyzer(SemanticAnalyzer):
                 "symbol_table": dict(self.symbol_table),
             },
         )
-        
+
         return ProgramNode(new_statements)
 
     def analyze_assignment(self, node: AssignmentNode) -> AssignmentNode:
@@ -674,7 +1097,7 @@ class TracingSemanticAnalyzer(SemanticAnalyzer):
 
         analyzed_value = self.analyze_expression(node.value)
         value_type = self.get_expression_type(analyzed_value)
-        
+
         self.symbol_table[node.identifier] = value_type
 
         self.trace_step(
@@ -686,13 +1109,13 @@ class TracingSemanticAnalyzer(SemanticAnalyzer):
                 "symbol_table": dict(self.symbol_table),
             },
         )
-        
+
         return AssignmentNode(node.identifier, analyzed_value)
 
     def analyze_expression(self, node: ASTNode) -> ASTNode:
         """Analyze expression with tracing"""
         expr_type = self.get_expression_type(node)
-        
+
         self.trace_step(
             f"Analyzing {type(node).__name__} expression (type: {expr_type})",
             {
@@ -725,7 +1148,7 @@ class TracingSemanticAnalyzer(SemanticAnalyzer):
 
         left = self.analyze_expression(node.left)
         right = self.analyze_expression(node.right)
-        
+
         left_type = self.get_expression_type(left)
         right_type = self.get_expression_type(right)
 
@@ -738,10 +1161,10 @@ class TracingSemanticAnalyzer(SemanticAnalyzer):
                 "operator": node.operator,
             },
         )
-        
+
         if left_type == "float" and right_type == "int":
             self.trace_step(
-                f"Type coercion needed: converting right operand (int) to float",
+                "Type coercion needed: converting right operand (int) to float",
                 {
                     "action": "coercion_needed",
                     "coercion_side": "right",
@@ -749,12 +1172,12 @@ class TracingSemanticAnalyzer(SemanticAnalyzer):
                     "to_type": "float",
                 },
             )
-            
+
             node_id = self.get_next_node_id()
             right = Int2FloatNode(right)
-            
+
             self.trace_step(
-                f"Created Int2Float wrapper for right operand",
+                "Created Int2Float wrapper for right operand",
                 {
                     "action": "create_coercion_node",
                     "node_id": node_id,
@@ -762,10 +1185,10 @@ class TracingSemanticAnalyzer(SemanticAnalyzer):
                     "wrapped_type": type(right.child).__name__,
                 },
             )
-            
+
         elif left_type == "int" and right_type == "float":
             self.trace_step(
-                f"Type coercion needed: converting left operand (int) to float",
+                "Type coercion needed: converting left operand (int) to float",
                 {
                     "action": "coercion_needed",
                     "coercion_side": "left",
@@ -773,12 +1196,12 @@ class TracingSemanticAnalyzer(SemanticAnalyzer):
                     "to_type": "float",
                 },
             )
-            
+
             node_id = self.get_next_node_id()
             left = Int2FloatNode(left)
-            
+
             self.trace_step(
-                f"Created Int2Float wrapper for left operand",
+                "Created Int2Float wrapper for left operand",
                 {
                     "action": "create_coercion_node",
                     "node_id": node_id,
@@ -788,14 +1211,14 @@ class TracingSemanticAnalyzer(SemanticAnalyzer):
             )
         else:
             self.trace_step(
-                f"No type coercion needed",
+                "No type coercion needed",
                 {
                     "action": "no_coercion",
                     "left_type": left_type,
                     "right_type": right_type,
                 },
             )
-        
+
         return BinaryOpNode(node.operator, left, right)
 
 
@@ -822,7 +1245,9 @@ def trace_compilation(source_code: str) -> dict:
         ast = parser.parse_program()
 
         # Phase 3: Semantic Analysis
-        semantic_analyzer = TracingSemanticAnalyzer(step_id_start=len(lexer.steps) + len(parser.steps))
+        semantic_analyzer = TracingSemanticAnalyzer(
+            step_id_start=len(lexer.steps) + len(parser.steps)
+        )
         analyzed_ast = semantic_analyzer.analyze(ast)
 
         # Combine all steps
@@ -836,7 +1261,6 @@ def trace_compilation(source_code: str) -> dict:
             "success": True,
         }
 
-    except Exception as e:
+    except Exception:
         print(traceback.format_exc())
         return {"steps": [], "success": False, "error": str(traceback.format_exc())}
-
