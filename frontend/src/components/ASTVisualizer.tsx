@@ -210,6 +210,25 @@ const getLayoutedElements = (nodes: FlowNode[], edges: Edge[]) => {
 
   const layoutedNodes = [...nodes];
   
+  // Calculate required width for each subtree (bottom-up)
+  const calculateSubtreeWidth = (nodeId: string): number => {
+    const childEdges = edges.filter(e => e.source === nodeId);
+    const childCount = childEdges.length;
+    
+    if (childCount === 0) {
+      // Leaf node: return minimum width
+      return 150;
+    }
+    
+    // Calculate total width needed for all children
+    const childWidths = childEdges.map(edge => calculateSubtreeWidth(edge.target));
+    const totalChildWidth = childWidths.reduce((sum, w) => sum + w, 0);
+    
+    // Use the larger of: sum of child widths OR minimum spacing * child count
+    const minSpacingPerChild = 250;
+    return Math.max(totalChildWidth, childCount * minSpacingPerChild);
+  };
+  
   const positionSubtree = (nodeId: string, x: number, y: number, width: number) => {
     const node = layoutedNodes.find(n => n.id === nodeId);
     if (!node) return;
@@ -221,21 +240,39 @@ const getLayoutedElements = (nodes: FlowNode[], edges: Edge[]) => {
     const childCount = childEdges.length;
     
     if (childCount > 0) {
-      // Ensure minimum spacing per child to prevent clustering
-      const minSpacingPerChild = 250;
-      const requiredWidth = Math.max(width, childCount * minSpacingPerChild);
-      const childWidth = requiredWidth / childCount;
+      // Calculate width needed for each child based on its subtree
+      const childWidths = childEdges.map(edge => calculateSubtreeWidth(edge.target));
+      const totalChildWidth = childWidths.reduce((sum, w) => sum + w, 0);
+      const requiredWidth = Math.max(width, totalChildWidth);
       
-      childEdges.forEach((edge, index) => {
-        const childX = x + (index * childWidth) + (childWidth / 2) - (requiredWidth / 2);
-        const childY = y + 150; // Increased vertical spacing
-        positionSubtree(edge.target, childX, childY, childWidth);
-      });
+      if (childCount === 1) {
+        // Single child: center it
+        const childWidth = childWidths[0];
+        const childX = x;
+        const childY = y + 150;
+        positionSubtree(childEdges[0].target, childX, childY, childWidth);
+      } else {
+        // Multiple children: space them evenly with padding
+        const totalGaps = childCount + 1;
+        const availableForGaps = requiredWidth - totalChildWidth;
+        const gapSize = Math.max(50, availableForGaps / totalGaps);
+        
+        // Position children left to right with gaps
+        let currentX = x - (requiredWidth / 2) + gapSize;
+        childEdges.forEach((edge, index) => {
+          const childWidth = childWidths[index];
+          const childX = currentX + (childWidth / 2);
+          const childY = y + 150;
+          positionSubtree(edge.target, childX, childY, childWidth);
+          currentX += childWidth + gapSize;
+        });
+      }
     }
   };
   
   // Calculate initial width based on tree complexity
-  const maxWidth = Math.max(1600, nodes.length * 150);
+  const rootWidth = calculateSubtreeWidth(rootNode.id);
+  const maxWidth = Math.max(1600, rootWidth);
   positionSubtree(rootNode.id, maxWidth / 2, 50, maxWidth);
 
   return { nodes: layoutedNodes, edges };
