@@ -53,7 +53,7 @@ def test_logical_operators():
 
 def test_if_statement_with_else():
     code = """
-    if (x >= 3)
+    if (x >= 3) then
         write 10;
     else
         write 20;
@@ -73,7 +73,7 @@ def test_if_statement_with_else():
 
 def test_if_statement_without_else():
     code = """
-    if (x > 0)
+    if (x > 0) then
         write x;
     end
     """
@@ -123,7 +123,7 @@ def test_write_statement():
 def test_complex_program():
     code = """
     x := 5;
-    if (x >= 3)
+    if (x >= 3) then
         read y;
     else
         write x % 2;
@@ -155,7 +155,7 @@ def test_expression_precedence():
 
 def test_multi_statement_if_block():
     code = """
-    if (x > 0)
+    if (x > 0) then
         read y;
         write y;
         z := y + 1;
@@ -174,7 +174,7 @@ def test_multi_statement_if_block():
 
 def test_multi_statement_if_else_blocks():
     code = """
-    if (x > 0)
+    if (x > 0) then
         read y;
         write y;
     else
@@ -215,8 +215,8 @@ def test_multi_statement_repeat_block():
 
 def test_nested_if_statements():
     code = """
-    if (x > 0)
-        if (y > 0)
+    if (x > 0) then
+        if (y > 0) then
             write 1;
         end
         write 2;
@@ -234,7 +234,7 @@ def test_nested_if_statements():
 
 def test_nested_repeat_in_if():
     code = """
-    if (x > 0)
+    if (x > 0) then
         repeat
             write i;
             i := i + 1;

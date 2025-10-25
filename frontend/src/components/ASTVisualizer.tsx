@@ -54,6 +54,8 @@ const getNodeColor = (nodeType: string): string => {
       return '#22c55e'; // green
     case 'Write':
       return '#a855f7'; // purple
+    case 'Error':
+      return '#ef4444'; // red
     default:
       return '#6b7280'; // gray
   }
@@ -108,6 +110,9 @@ const convertASTToFlow = (ast: ASTNode): { nodes: FlowNode[]; edges: Edge[] } =>
         break;
       case 'Write':
         label = 'write';
+        break;
+      case 'Error':
+        label = `❌ ${node.message || 'Parse Error'}`;
         break;
     }
 

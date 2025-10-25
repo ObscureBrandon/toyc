@@ -164,9 +164,21 @@ class Lexer:
                         self.read_char()
                         fractional = self.read_number()
                         literal += "." + fractional
-                        token = self._new_token(TokenType.FLOAT, literal)
+                        if self.is_letter(self.ch):
+                            while self.is_letter(self.ch) or self.is_digit(self.ch):
+                                literal += self.ch
+                                self.read_char()
+                            token = self._new_token(TokenType.ILLEGAL, literal)
+                        else:
+                            token = self._new_token(TokenType.FLOAT, literal)
                     else:
-                        token = self._new_token(TokenType.NUMBER, literal)
+                        if self.is_letter(self.ch):
+                            while self.is_letter(self.ch) or self.is_digit(self.ch):
+                                literal += self.ch
+                                self.read_char()
+                            token = self._new_token(TokenType.ILLEGAL, literal)
+                        else:
+                            token = self._new_token(TokenType.NUMBER, literal)
                     return token
                 else:
                     token = self._new_token(TokenType.ILLEGAL, self.ch)

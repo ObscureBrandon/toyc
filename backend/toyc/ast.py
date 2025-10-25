@@ -172,6 +172,36 @@ class WriteNode(ASTNode):
         }
 
 
+class ErrorNode(ASTNode):
+    """Error node to represent parse failures in the AST"""
+
+    def __init__(
+        self,
+        message: str,
+        expected: List[str],
+        found: str,
+        line: int = 0,
+        col: int = 0,
+        context: str = "",
+    ):
+        self.message = message
+        self.expected = expected
+        self.found = found
+        self.line = line
+        self.col = col
+        self.context = context
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "type": "Error",
+            "message": self.message,
+            "expected": self.expected,
+            "found": self.found,
+            "position": {"line": self.line, "col": self.col},
+            "context": self.context,
+        }
+
+
 class ParseError(Exception):
     """Parser error with position information"""
 

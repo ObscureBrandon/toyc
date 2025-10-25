@@ -6,7 +6,7 @@ x := 5;
 counter := 0;
 
 { Multi-statement if-else blocks }
-if (x >= 3)
+if (x >= 3) then
   read y;
   write y;
   z := y + 1;
@@ -26,15 +26,15 @@ until counter >= 10;
 result := 10 + 5 * 2 % 3;
 
 %% Logical operators with nested blocks
-if (x > 0 && y < 100 || result == 0)
+if (x > 0 && y < 100 || result == 0) then
   write result;
-  if (result == 0)
+  if (result == 0) then
     write 999;
   end
 end
 
 %% Nested repeat in if
-if (x > 0)
+if (x > 0) then
   i := 0;
   repeat
     write i;

@@ -31,6 +31,12 @@ export interface ASTNode {
   body?: ASTNode;
   expression?: ASTNode;
   data?: Record<string, string | number | boolean | null>;
+  // Error node fields
+  message?: string;
+  expected?: string[];
+  found?: string;
+  position?: { line: number; col: number };
+  context?: string;
 }
 
 export interface ParserResponse {
@@ -61,6 +67,7 @@ export interface TraceResponse {
   ast?: ASTNode;
   analyzed_ast?: ASTNode;
   error?: string;
+  error_phase?: string; // 'lexing', 'parsing', 'semantic_analysis'
 }
 
 export interface TraceRequest {

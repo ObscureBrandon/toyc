@@ -61,6 +61,8 @@ const getNodeColor = (nodeType: string): string => {
       return '#22c55e'; // green
     case 'Write':
       return '#a855f7'; // purple
+    case 'Error':
+      return '#ef4444'; // red
     default:
       return '#6b7280'; // gray
   }
@@ -79,12 +81,13 @@ const AnimatedNode = ({ data }: { data: FlowNode['data'] }) => {
         duration: 0.5,
         delay: data.stepIndex * 0.2 
       }}
-      className="px-3 rounded-lg border-2 text-white font-bold text-sm text-center min-w-[80px] relative flex items-center justify-center"
+      className="px-3 py-2 rounded-lg border-2 text-white font-bold text-sm text-center min-w-[80px] relative flex items-center justify-center whitespace-nowrap"
       style={{
         backgroundColor: getNodeColor(data.nodeType),
         borderColor: data.highlighted ? '#fbbf24' : '#374151',
         borderWidth: data.highlighted ? '3px' : '2px',
-        height: '50px',
+        minHeight: '50px',
+        width: 'auto',
       }}
     >
       {/* Invisible handles for React Flow connections */}
@@ -295,50 +298,57 @@ export function AnimatedAST({ visibleSteps, currentStep }: AnimatedASTProps) {
         case 'Write':
           label = 'write';
           break;
+        case 'Error':
+          label = `❌ ${astNode.message || 'Parse Error'}`;
+          break;
       }
 
-      // Calculate position based on tree layout
-      const x = depth === 0 ? 250 : (depth === 1 ? 250 : (parentId?.includes('left') ? 150 : 350));
-      const y = depth * 120 + 50;
+       // Calculate position based on tree layout
+       const x = depth === 0 ? 250 : (depth === 1 ? 250 : (parentId?.includes('left') ? 150 : 350));
+       const y = depth * 120 + 50;
 
-       // Add node
-       nodes.push({
-         id: currentId,
-         type: 'animated',
-         position: { x, y },
-         data: {
-           label,
-           nodeType: astNode.type,
-           value,
-           stepIndex,
-           highlighted: currentStep?.step_id === stepId,
-         },
-          draggable: false,
-          width: 80,
-          height: 50,
-        });
+        // Calculate node width based on label length
+        const labelLength = label.length;
+        const nodeWidth = Math.max(80, labelLength * 8 + 24); // 8px per char + padding
 
-      // Add edge from parent (only if parentId is not null)
-      if (parentId && parentId !== 'null' && parentId !== null) {
-        // Calculate edge delay: appear after both source and target nodes
-        const parentStepIndex = nodeIdToStepIndex.get(parentId) ?? 0;
-        const currentStepIndex = stepIndex;
-        const maxNodeStepIndex = Math.max(parentStepIndex, currentStepIndex);
-        const edgeDelay = (maxNodeStepIndex + 1) * 0.2 + 0.3; // Base node delay + extra delay for edge
-
-        const edge = {
-          id: `edge-${parentId}-${currentId}`,
-          source: String(parentId), // Ensure it's a string
-          target: currentId,
+        // Add node
+        nodes.push({
+          id: currentId,
           type: 'animated',
-          data: { delay: edgeDelay },
-          animated: currentStep?.step_id === stepId,
-        };
-        console.log('Adding edge:', edge, 'delay:', edgeDelay);
-        edges.push(edge);
-      } else {
-        console.log('Skipping edge creation - parentId:', parentId, 'type:', typeof parentId);
-      }
+          position: { x, y },
+          data: {
+            label,
+            nodeType: astNode.type,
+            value,
+            stepIndex,
+            highlighted: currentStep?.step_id === stepId,
+          },
+           draggable: false,
+           width: nodeWidth,
+           height: 50,
+         });
+
+       // Add edge from parent (only if parentId is not null)
+       if (parentId && parentId !== 'null' && parentId !== null) {
+         // Calculate edge delay: appear after both source and target nodes
+         const parentStepIndex = nodeIdToStepIndex.get(parentId) ?? 0;
+         const currentStepIndex = stepIndex;
+         const maxNodeStepIndex = Math.max(parentStepIndex, currentStepIndex);
+         const edgeDelay = (maxNodeStepIndex + 1) * 0.2 + 0.3; // Base node delay + extra delay for edge
+
+         const edge = {
+           id: `edge-${parentId}-${currentId}`,
+           source: String(parentId), // Ensure it's a string
+           target: currentId,
+           type: 'animated',
+           data: { delay: edgeDelay },
+           animated: false,
+         };
+         console.log('Adding edge:', edge, 'delay:', edgeDelay);
+         edges.push(edge);
+       } else {
+         console.log('Skipping edge creation - parentId:', parentId, 'type:', typeof parentId);
+       }
 
       // Build children based on AST node structure
       if (astNode.type === 'Assignment' && 'value' in astNode && astNode.value && typeof astNode.value === 'object') {

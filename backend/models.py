@@ -54,3 +54,4 @@ class TraceResponse(BaseModel):
     ast: Optional[Dict[str, Any]] = None
     analyzed_ast: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
+    error_phase: Optional[str] = None  # 'lexing', 'parsing', or 'semantic_analysis'

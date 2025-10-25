@@ -56,6 +56,8 @@ const getNodeColor = (nodeType: string): string => {
       return '#22c55e';
     case 'Write':
       return '#a855f7';
+    case 'Error':
+      return '#ef4444';
     default:
       return '#6b7280';
   }
@@ -261,6 +263,9 @@ export function AnalyzedASTVisualizer({ analyzedAst }: AnalyzedASTVisualizerProp
           break;
         case 'Write':
           label = 'write';
+          break;
+        case 'Error':
+          label = `❌ ${astNode.message || 'Parse Error'}`;
           break;
       }
 

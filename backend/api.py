@@ -100,14 +100,6 @@ async def trace_code(request: TraceRequest) -> TraceResponse:
     try:
         result = trace_compilation(request.source_code)
 
-        if not result["success"]:
-            return TraceResponse(
-                steps=[],
-                source_code=request.source_code,
-                success=False,
-                error=result.get("error", "Unknown error"),
-            )
-
         # Convert steps to TraceStep objects
         trace_steps = []
         for step in result["steps"]:
@@ -124,10 +116,12 @@ async def trace_code(request: TraceRequest) -> TraceResponse:
         return TraceResponse(
             steps=trace_steps,
             source_code=request.source_code,
-            success=True,
+            success=result["success"],
             tokens=result.get("tokens"),
             ast=result.get("ast"),
             analyzed_ast=result.get("analyzed_ast"),
+            error=result.get("error"),
+            error_phase=result.get("error_phase"),
         )
 
     except Exception as e:

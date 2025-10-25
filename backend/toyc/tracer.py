@@ -16,6 +16,7 @@ from .ast import (
     RepeatUntilNode,
     ReadNode,
     WriteNode,
+    ErrorNode,
     ParseError,
 )
 from .semantic_analyzer import SemanticAnalyzer
@@ -597,9 +598,40 @@ class TracingLexer(Lexer):
                         "token_type": "FLOAT",
                     },
                 )
+
+                if self.is_letter(self.ch):
+                    while self.is_letter(self.ch) or self.is_digit(self.ch):
+                        literal += self.ch
+                        self.read_char()
+                    token = self._new_token(TokenType.ILLEGAL, literal)
+                    token_type = "ILLEGAL"
+                    self.trace_step(
+                        f"Invalid identifier (starts with number): '{literal}'",
+                        {
+                            "literal": literal,
+                            "action": "invalid_identifier",
+                            "token_type": "ILLEGAL",
+                        },
+                    )
+
             else:
-                token = self._new_token(TokenType.NUMBER, literal)
-                token_type = "NUMBER"
+                if self.is_letter(self.ch):
+                    while self.is_letter(self.ch) or self.is_digit(self.ch):
+                        literal += self.ch
+                        self.read_char()
+                    token = self._new_token(TokenType.ILLEGAL, literal)
+                    token_type = "ILLEGAL"
+                    self.trace_step(
+                        f"Invalid identifier (starts with number): '{literal}'",
+                        {
+                            "literal": literal,
+                            "action": "invalid_identifier",
+                            "token_type": "ILLEGAL",
+                        },
+                    )
+                else:
+                    token = self._new_token(TokenType.NUMBER, literal)
+                    token_type = "NUMBER"
 
             # Don't advance here since read_number already did
             self.trace_step(
@@ -649,6 +681,7 @@ class TracingParser:
         self.step_id = len(lexer.steps)  # Continue from lexer steps
         self.node_id_counter = 0  # For tracking node relationships
         self.node_stack = []  # Stack to track parent-child relationships
+        self.parsed_statements = []  # Store successfully parsed statements
 
         # Load first two tokens
         self.advance()
@@ -744,6 +777,7 @@ class TracingParser:
             try:
                 stmt = self.parse_statement()
                 statements.append(stmt)
+                self.parsed_statements.append(stmt)  # Store for error recovery
 
                 self.trace_step(
                     f"Completed statement of type {type(stmt).__name__}",
@@ -754,11 +788,8 @@ class TracingParser:
                 )
 
             except ParseError as e:
-                self.trace_step(
-                    f"Parse error: {e.message}",
-                    {"error": e.message, "action": "parse_error"},
-                )
-                self.advance()
+                # Re-raise the error so it can be handled by trace_compilation
+                raise
 
         program = ProgramNode(statements)
         program_node_id = self.get_next_node_id()
@@ -883,6 +914,8 @@ class TracingParser:
         )
 
         if not self.current_token or self.current_token.type != TokenType.SEMICOLON:
+            # Store the assignment before raising error so it can be included in partial AST
+            self.parsed_statements.append(assignment)
             raise ParseError("Expected ';' after assignment", self.position)
 
         self.trace_step("Consuming assignment semicolon", {"action": "consume_semicolon"})
@@ -1806,30 +1839,148 @@ def trace_compilation(source_code: str) -> dict:
     """
     Trace the complete compilation process step by step
     """
+    # Phase 1: Lexing (always attempt)
+    lexer = TracingLexer(source_code)
+    tokens = []
+    
     try:
-        # Phase 1: Lexing
-        lexer = TracingLexer(source_code)
-
         # Collect all tokens to get lexing steps
-        tokens = []
         while True:
             token = lexer.next_token()
             tokens.append(token)
             if token.type == TokenType.EOF:
                 break
+    except Exception as e:
+        # Lexing error - return what we have so far
+        error_step = {
+            "phase": "lexing",
+            "step_id": lexer.step_id,
+            "position": lexer.position,
+            "description": f"Lexing error: {str(e)}",
+            "state": {
+                "action": "error",
+                "error_type": type(e).__name__,
+                "message": str(e),
+            },
+        }
+        lexer.steps.append(error_step)
+        
+        return {
+            "steps": lexer.steps,
+            "tokens": [{"type": t.type.name, "literal": t.literal} for t in tokens],
+            "ast": None,
+            "analyzed_ast": None,
+            "success": False,
+            "error": str(e),
+            "error_phase": "lexing",
+        }
 
-        # Phase 2: Parsing
-        # Create fresh lexer for parsing (since we consumed the first one)
-        parse_lexer = TracingLexer(source_code)
-        parser = TracingParser(parse_lexer)
+    # Phase 2: Parsing
+    parse_lexer = TracingLexer(source_code)
+    parser = TracingParser(parse_lexer)
+    ast = None
+    partial_ast = None
+    
+    try:
         ast = parser.parse_program()
-
-        # Phase 3: Semantic Analysis
-        semantic_analyzer = TracingSemanticAnalyzer(
-            step_id_start=len(lexer.steps) + len(parser.steps)
+    except ParseError as e:
+        # Create an error node for the failed parse
+        error_node = ErrorNode(
+            message=e.message,
+            expected=["expression", "statement", "identifier"],  # Generic for now
+            found=parser.current_token.literal if parser.current_token else "EOF",
+            line=0,  # We'll enhance this later with actual line numbers
+            col=e.position,
+            context=source_code[max(0, e.position - 20):min(len(source_code), e.position + 20)],
         )
-        analyzed_ast = semantic_analyzer.analyze(ast)
+        
+        # Create a program node with successfully parsed statements + error node
+        partial_ast = ProgramNode(parser.parsed_statements + [error_node])
+        
+        # Add Program node creation step
+        parser.step_id += 1
+        program_node_id = f"program_node_{parser.step_id}"
+        program_step = {
+            "phase": "parsing",
+            "step_id": parser.step_id,
+            "position": e.position,
+            "description": f"Created partial program node with {len(parser.parsed_statements)} statements + error",
+            "state": {
+                "action": "create_ast_node",
+                "node_type": "ProgramNode",
+                "node_id": program_node_id,
+                "parent_id": None,
+                "statement_count": len(parser.parsed_statements) + 1,
+                "ast_node": partial_ast.to_dict(),
+            },
+        }
+        parser.steps.append(program_step)
+        
+        # Add error step to parser steps
+        parser.step_id += 1
+        error_step = {
+            "phase": "parsing",
+            "step_id": parser.step_id,
+            "position": e.position,
+            "description": f"Parse error: {e.message}",
+            "state": {
+                "action": "create_ast_node",
+                "node_type": "ErrorNode",
+                "node_id": f"error_node_{parser.step_id}",
+                "parent_id": program_node_id,
+                "error_type": "ParseError",
+                "message": e.message,
+                "ast_node": error_node.to_dict(),
+            },
+        }
+        parser.steps.append(error_step)
+        
+        # Return partial results
+        all_steps = lexer.steps + parser.steps
+        return {
+            "steps": all_steps,
+            "tokens": [{"type": t.type.name, "literal": t.literal} for t in tokens],
+            "ast": partial_ast.to_dict(),
+            "analyzed_ast": None,
+            "success": False,
+            "error": e.message,
+            "error_phase": "parsing",
+        }
+    except Exception as e:
+        # Other parsing error
+        print(traceback.format_exc())
+        error_step = {
+            "phase": "parsing",
+            "step_id": parser.step_id,
+            "position": parser.position,
+            "description": f"Parsing error: {str(e)}",
+            "state": {
+                "action": "error",
+                "error_type": type(e).__name__,
+                "message": str(e),
+            },
+        }
+        parser.steps.append(error_step)
+        
+        all_steps = lexer.steps + parser.steps
+        return {
+            "steps": all_steps,
+            "tokens": [{"type": t.type.name, "literal": t.literal} for t in tokens],
+            "ast": None,
+            "analyzed_ast": None,
+            "success": False,
+            "error": str(e),
+            "error_phase": "parsing",
+        }
 
+    # Phase 3: Semantic Analysis
+    semantic_analyzer = TracingSemanticAnalyzer(
+        step_id_start=len(lexer.steps) + len(parser.steps)
+    )
+    
+    try:
+        analyzed_ast = semantic_analyzer.analyze(ast)
+        
         # Combine all steps
         all_steps = lexer.steps + parser.steps + semantic_analyzer.steps
 
@@ -1840,7 +1991,29 @@ def trace_compilation(source_code: str) -> dict:
             "analyzed_ast": analyzed_ast.to_dict(),
             "success": True,
         }
-
-    except Exception:
+    except Exception as e:
+        # Semantic analysis error
         print(traceback.format_exc())
-        return {"steps": [], "success": False, "error": str(traceback.format_exc())}
+        error_step = {
+            "phase": "semantic_analysis",
+            "step_id": semantic_analyzer.step_id,
+            "position": 0,
+            "description": f"Semantic analysis error: {str(e)}",
+            "state": {
+                "action": "error",
+                "error_type": type(e).__name__,
+                "message": str(e),
+            },
+        }
+        semantic_analyzer.steps.append(error_step)
+        
+        all_steps = lexer.steps + parser.steps + semantic_analyzer.steps
+        return {
+            "steps": all_steps,
+            "tokens": [{"type": t.type.name, "literal": t.literal} for t in tokens],
+            "ast": ast.to_dict(),
+            "analyzed_ast": None,
+            "success": False,
+            "error": str(e),
+            "error_phase": "semantic_analysis",
+        }

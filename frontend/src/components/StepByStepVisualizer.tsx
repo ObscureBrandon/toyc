@@ -135,12 +135,6 @@ export function StepByStepVisualizer({
         />
       </div>
 
-      {error && (
-        <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-md p-4">
-          <p className="text-red-800 dark:text-red-200 text-sm">{error}</p>
-        </div>
-      )}
-
       {traceData && (
         <>
           {/* Phase Progress Indicator */}
@@ -338,6 +332,59 @@ export function StepByStepVisualizer({
                     <span className="font-mono">
                       {currentStepData.position}
                     </span>
+                  </div>
+                )}
+                
+                {/* Error Details */}
+                {currentStepData.state?.error_type && currentStepData.state?.message && (
+                  <div className="mt-4 p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-md">
+                    <div className="flex items-start gap-2">
+                      <span className="text-red-600 dark:text-red-400 text-lg">⚠️</span>
+                      <div className="flex-1">
+                        <div className="font-semibold text-red-800 dark:text-red-200 mb-1">
+                          {currentStepData.state.error_type as string}
+                        </div>
+                        <div className="text-red-700 dark:text-red-300 text-sm">
+                          {currentStepData.state.message as string}
+                        </div>
+                        
+                        {/* Show error node details if available */}
+                        {currentStepData.state.ast_node && 
+                         typeof currentStepData.state.ast_node === 'object' && 
+                         'type' in currentStepData.state.ast_node && 
+                         currentStepData.state.ast_node.type === 'Error' && (
+                          <div className="mt-3 space-y-2 text-xs">
+                            {'expected' in currentStepData.state.ast_node && 
+                             Array.isArray(currentStepData.state.ast_node.expected) && 
+                             currentStepData.state.ast_node.expected.length > 0 && (
+                              <div>
+                                <span className="font-semibold">Expected: </span>
+                                <span className="font-mono">
+                                  {(currentStepData.state.ast_node.expected as string[]).join(', ')}
+                                </span>
+                              </div>
+                            )}
+                            {'found' in currentStepData.state.ast_node && (
+                              <div>
+                                <span className="font-semibold">Found: </span>
+                                <span className="font-mono">
+                                  {currentStepData.state.ast_node.found as string}
+                                </span>
+                              </div>
+                            )}
+                            {'context' in currentStepData.state.ast_node && 
+                             currentStepData.state.ast_node.context && (
+                              <div>
+                                <span className="font-semibold">Context: </span>
+                                <pre className="font-mono mt-1 p-2 bg-red-100 dark:bg-red-900 rounded overflow-x-auto">
+                                  {currentStepData.state.ast_node.context as string}
+                                </pre>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>

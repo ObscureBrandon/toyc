@@ -163,6 +163,7 @@ export function LexingPhase({
       AND: "bg-pink-500 text-white",
       OR: "bg-pink-500 text-white",
       IF: "bg-indigo-500 text-white",
+      THEN: "bg-indigo-500 text-white ",
       ELSE: "bg-indigo-500 text-white",
       END: "bg-indigo-500 text-white",
       REPEAT: "bg-indigo-500 text-white",
@@ -215,6 +216,7 @@ export function LexingPhase({
       AND: "bg-pink-500 text-white ",
       OR: "bg-pink-500 text-white ",
       IF: "bg-indigo-500 text-white ",
+      THEN: "bg-indigo-500 text-white ",
       ELSE: "bg-indigo-500 text-white ",
       END: "bg-indigo-500 text-white ",
       REPEAT: "bg-indigo-500 text-white ",
@@ -267,6 +269,7 @@ export function LexingPhase({
       AND: "bg-pink-300 text-black ",
       OR: "bg-pink-300 text-black ",
       IF: "bg-indigo-300 text-black ",
+      THEN: "bg-indigo-500 text-white ",
       ELSE: "bg-indigo-300 text-black ",
       END: "bg-indigo-300 text-black ",
       REPEAT: "bg-indigo-300 text-black ",
@@ -401,4 +404,3 @@ export function LexingPhase({
     </div>
   );
 }
-
