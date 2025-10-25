@@ -53,7 +53,13 @@ async def lex_code(request: LexerRequest) -> LexerResponse:
     while True:
         tok = lexer.next_token()
         tokens.append(
-            TokenResponse(type=tok.type.name, literal=tok.literal, position=position)
+            TokenResponse(
+                type=tok.type.name,
+                literal=tok.literal,
+                position=position,
+                line=tok.line,
+                column=tok.column,
+            )
         )
         position += 1
 
@@ -83,6 +89,8 @@ async def parse_source_code(request: ParserRequest) -> ParserResponse:
             success=False,
             error=e.message,
             error_position=e.position,
+            error_line=e.line,
+            error_column=e.column,
         )
 
     except Exception as e:

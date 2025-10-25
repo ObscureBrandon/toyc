@@ -83,9 +83,11 @@ class TracingLexer(Lexer):
         # Just read the character without verbose tracing
         super().read_char()
 
-    def read_identifier(self) -> str:
+    def read_identifier(self) -> tuple[str, int, int]:
         """Read identifier with incremental tracing"""
         start_position = self.position
+        start_line = self.line
+        start_column = self.column
         current_lexeme = ""
 
         while self.ch.isalpha():
@@ -101,11 +103,13 @@ class TracingLexer(Lexer):
             )
             self.read_char()
 
-        return self.input[start_position : self.position]
+        return self.input[start_position : self.position], start_line, start_column
 
-    def read_number(self) -> str:
+    def read_number(self) -> tuple[str, int, int]:
         """Read number with incremental tracing"""
         start_position = self.position
+        start_line = self.line
+        start_column = self.column
         current_lexeme = ""
 
         while self.ch.isdigit():
@@ -121,7 +125,7 @@ class TracingLexer(Lexer):
             )
             self.read_char()
 
-        return self.input[start_position : self.position]
+        return self.input[start_position : self.position], start_line, start_column
 
     def next_token(self) -> Token:
         """Create next token with tracing"""
@@ -545,10 +549,11 @@ class TracingLexer(Lexer):
                     "token_type": "IDENTIFIER/KEYWORD",
                 },
             )
-            literal = self.read_identifier()
+            literal, start_line, start_column = self.read_identifier()
             token_type = lookup_identifier(literal)
-            token = self._new_token(token_type, literal)
-            # Don't advance here since read_identifier already did
+            start_pos = self.position - len(literal)
+            end_pos = self.position - 1
+            token = Token(token_type, literal, start_line, start_column, start_pos, end_pos)
             self.trace_step(
                 f"Created {token_type.name} token: '{literal}'",
                 {
@@ -567,9 +572,9 @@ class TracingLexer(Lexer):
                     "token_type": "NUMBER",
                 },
             )
-            literal = self.read_number()
+            literal, start_line, start_column = self.read_number()
+            start_pos = self.position - len(literal)
 
-            # Check for decimal point to create FLOAT token
             if self.ch == ".":
                 self.trace_step(
                     "Found decimal point, converting to FLOAT token",
@@ -580,14 +585,14 @@ class TracingLexer(Lexer):
                     },
                 )
                 literal += "."
-                self.read_char()  # consume the '.'
+                self.read_char()
 
-                # Read fractional part
                 fractional_start = len(literal)
-                fractional = self.read_number()
+                fractional, _, _ = self.read_number()
                 literal += fractional
 
-                token = self._new_token(TokenType.FLOAT, literal)
+                end_pos = self.position - 1
+                token = Token(TokenType.FLOAT, literal, start_line, start_column, start_pos, end_pos)
                 token_type = "FLOAT"
 
                 self.trace_step(
@@ -603,7 +608,8 @@ class TracingLexer(Lexer):
                     while self.is_letter(self.ch) or self.is_digit(self.ch):
                         literal += self.ch
                         self.read_char()
-                    token = self._new_token(TokenType.ILLEGAL, literal)
+                    end_pos = self.position - 1
+                    token = Token(TokenType.ILLEGAL, literal, start_line, start_column, start_pos, end_pos)
                     token_type = "ILLEGAL"
                     self.trace_step(
                         f"Invalid identifier (starts with number): '{literal}'",
@@ -619,7 +625,8 @@ class TracingLexer(Lexer):
                     while self.is_letter(self.ch) or self.is_digit(self.ch):
                         literal += self.ch
                         self.read_char()
-                    token = self._new_token(TokenType.ILLEGAL, literal)
+                    end_pos = self.position - 1
+                    token = Token(TokenType.ILLEGAL, literal, start_line, start_column, start_pos, end_pos)
                     token_type = "ILLEGAL"
                     self.trace_step(
                         f"Invalid identifier (starts with number): '{literal}'",
@@ -630,10 +637,10 @@ class TracingLexer(Lexer):
                         },
                     )
                 else:
-                    token = self._new_token(TokenType.NUMBER, literal)
+                    end_pos = self.position - 1
+                    token = Token(TokenType.NUMBER, literal, start_line, start_column, start_pos, end_pos)
                     token_type = "NUMBER"
 
-            # Don't advance here since read_number already did
             self.trace_step(
                 f"Created {token_type} token: '{literal}'",
                 {
@@ -855,7 +862,7 @@ class TracingParser:
 
     def parse_statement(self) -> ASTNode:
         if not self.current_token:
-            raise ParseError("Unexpected end of input", self.position)
+            raise ParseError("Unexpected end of input", self.position, 0, 0)
         
         if self.current_token.type == TokenType.IF:
             self.trace_step(
@@ -923,7 +930,9 @@ class TracingParser:
             
             self.trace_step("Expecting statement-terminating semicolon", {"action": "expect_semicolon"})
             if not self.current_token or self.current_token.type != TokenType.SEMICOLON:
-                raise ParseError("Expected ';' after expression statement", self.position)
+                line = self.current_token.line if self.current_token else 1
+                column = self.current_token.column if self.current_token else 1
+                raise ParseError("Expected ';' after expression statement", self.position, line, column)
             self.advance()
             
             return expr
@@ -933,7 +942,7 @@ class TracingParser:
         identifier_token = self.current_token
 
         if not identifier_token:
-            raise ParseError("Expected identifier for assignment", self.position)
+            raise ParseError("Expected identifier for assignment", self.position, 0, 0)
 
         self.trace_step(
             f"Parsing assignment to '{identifier_token.literal}'",
@@ -962,9 +971,10 @@ class TracingParser:
         )
 
         if not self.current_token or self.current_token.type != TokenType.SEMICOLON:
-            # Store the assignment before raising error so it can be included in partial AST
+            line = self.current_token.line if self.current_token else 1
+            column = self.current_token.column if self.current_token else 1
             self.parsed_statements.append(assignment)
-            raise ParseError("Expected ';' after assignment", self.position)
+            raise ParseError("Expected ';' after assignment", self.position, line, column)
 
         self.trace_step("Consuming assignment semicolon", {"action": "consume_semicolon"})
         self.advance()
@@ -1038,7 +1048,7 @@ class TracingParser:
         self.advance()
         
         if not self.current_token or self.current_token.type != TokenType.LPAREN:
-            raise ParseError("Expected '(' after 'if'", self.position)
+            raise ParseError("Expected '(' after 'if'", self.position, self.current_token.line if self.current_token else 0, self.current_token.column if self.current_token else 1)
         
         self.trace_step(
             "Parsing if condition",
@@ -1049,12 +1059,12 @@ class TracingParser:
         condition = self.parse_expression()
         
         if not self.current_token or self.current_token.type != TokenType.RPAREN:
-            raise ParseError("Expected ')' after if condition", self.position)
+            raise ParseError("Expected ')' after if condition", self.position, self.current_token.line if self.current_token else 0, self.current_token.column if self.current_token else 1)
         
         self.advance()
         
         if not self.current_token or self.current_token.type != TokenType.THEN:
-            raise ParseError("Expected 'then' after if condition", self.position)
+            raise ParseError("Expected 'then' after if condition", self.position, self.current_token.line if self.current_token else 0, self.current_token.column if self.current_token else 1)
         
         self.trace_step(
             "Found 'then' keyword",
@@ -1079,7 +1089,7 @@ class TracingParser:
             else_branch = self.parse_block([TokenType.END])
         
         if not self.current_token or self.current_token.type != TokenType.END:
-            raise ParseError("Expected 'end' after if statement", self.position)
+            raise ParseError("Expected 'end' after if statement", self.position, self.current_token.line if self.current_token else 0, self.current_token.column if self.current_token else 1)
         
         self.advance()
         
@@ -1117,7 +1127,7 @@ class TracingParser:
         body = self.parse_block([TokenType.UNTIL])
         
         if not self.current_token or self.current_token.type != TokenType.UNTIL:
-            raise ParseError("Expected 'until' after repeat body", self.position)
+            raise ParseError("Expected 'until' after repeat body", self.position, self.current_token.line if self.current_token else 0, self.current_token.column if self.current_token else 1)
         
         self.trace_step(
             "Parsing until condition",
@@ -1128,7 +1138,7 @@ class TracingParser:
         condition = self.parse_expression()
         
         if not self.current_token or self.current_token.type != TokenType.SEMICOLON:
-            raise ParseError("Expected ';' after until condition", self.position)
+            raise ParseError("Expected ';' after until condition", self.position, self.current_token.line if self.current_token else 0, self.current_token.column if self.current_token else 1)
         
         self.advance()
         
@@ -1156,7 +1166,7 @@ class TracingParser:
         self.advance()
         
         if not self.current_token or self.current_token.type != TokenType.IDENTIFIER:
-            raise ParseError("Expected identifier after 'read'", self.position)
+            raise ParseError("Expected identifier after 'read'", self.position, self.current_token.line if self.current_token else 0, self.current_token.column if self.current_token else 1)
         
         identifier = self.current_token.literal
         
@@ -1168,7 +1178,7 @@ class TracingParser:
         self.advance()
         
         if not self.current_token or self.current_token.type != TokenType.SEMICOLON:
-            raise ParseError("Expected ';' after read statement", self.position)
+            raise ParseError("Expected ';' after read statement", self.position, self.current_token.line if self.current_token else 0, self.current_token.column if self.current_token else 1)
         
         self.advance()
         
@@ -1206,7 +1216,7 @@ class TracingParser:
         expression = self.parse_expression()
         
         if not self.current_token or self.current_token.type != TokenType.SEMICOLON:
-            raise ParseError("Expected ';' after write statement", self.position)
+            raise ParseError("Expected ';' after write statement", self.position, self.current_token.line if self.current_token else 0, self.current_token.column if self.current_token else 1)
         
         self.advance()
         
@@ -1265,6 +1275,8 @@ class TracingParser:
             raise ParseError(
                 "Unexpected end of input while parsing expression",
                 self.position,
+                0,
+                0,
             )
 
         self.trace_step(
@@ -1326,7 +1338,9 @@ class TracingParser:
 
             if not self.current_token or self.current_token.type != TokenType.RPAREN:
                 current_type = self.current_token.type if self.current_token else "EOF"
-                raise ParseError(f"Expected ')', got {current_type}", self.position)
+                line = self.current_token.line if self.current_token else 1
+                column = self.current_token.column if self.current_token else 1
+                raise ParseError(f"Expected ')', got {current_type}", self.position, line, column)
 
             self.advance()
 
@@ -1340,6 +1354,8 @@ class TracingParser:
             raise ParseError(
                 f"Unexpected token in expression: {token.type} '{token.literal}'",
                 self.position,
+                token.line,
+                token.column,
             )
 
     def parse_infix_expression(self, left: ASTNode) -> ASTNode:
@@ -1348,7 +1364,7 @@ class TracingParser:
         Parses binary operations given left operand
         """
         if self.current_token is None:
-            raise ParseError("Unexpected end of input in infix expression", self.position)
+            raise ParseError("Unexpected end of input in infix expression", self.position, self.current_token.line if self.current_token else 0, self.current_token.column if self.current_token else 1)
         
         operator = self.current_token.literal
         precedence = self.current_precedence()
@@ -1768,13 +1784,36 @@ def trace_compilation(source_code: str) -> dict:
         ast = parser.parse_program()
     except ParseError as e:
         # Create an error node for the failed parse
+        
+        # Determine what was found at the error position
+        if parser.current_token:
+            if parser.current_token.literal:
+                found = parser.current_token.literal
+            else:
+                found = parser.current_token.type.name
+        else:
+            found = "EOF"
+        
+        # Get context: show the line where the error occurred
+        lines = source_code.split('\n')
+        line_idx = e.line - 1
+        if 0 <= line_idx < len(lines):
+            context = lines[line_idx]
+        else:
+            # Fallback: use character position if line is out of bounds
+            if parser.current_token:
+                char_pos = parser.current_token.start_pos
+            else:
+                char_pos = len(source_code)
+            context = source_code[max(0, char_pos - 30):min(len(source_code), char_pos + 30)]
+        
         error_node = ErrorNode(
             message=e.message,
             expected=["expression", "statement", "identifier"],  # Generic for now
-            found=parser.current_token.literal if parser.current_token else "EOF",
-            line=0,  # We'll enhance this later with actual line numbers
-            col=e.position,
-            context=source_code[max(0, e.position - 20):min(len(source_code), e.position + 20)],
+            found=found,
+            line=e.line,
+            col=e.column,
+            context=context,
         )
         
         # Create a program node with successfully parsed statements + error node
@@ -1828,6 +1867,9 @@ def trace_compilation(source_code: str) -> dict:
             "success": False,
             "error": e.message,
             "error_phase": "parsing",
+            "error_line": e.line,
+            "error_column": e.column,
+            "error_position": e.position,
         }
     except Exception as e:
         # Other parsing error

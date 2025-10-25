@@ -72,9 +72,13 @@ class Parser:
         """Consume token of expected type or raise error"""
         if self.current_token is None or self.current_token.type != expected_type:
             actual_type = self.current_token.type if self.current_token else "None"
+            line = self.current_token.line if self.current_token else 1
+            column = self.current_token.column if self.current_token else 1
             raise ParseError(
                 f"Expected {expected_type}, got {actual_type}",
                 self.position,
+                line,
+                column,
             )
         token = self.current_token
         self.advance()
@@ -113,7 +117,7 @@ class Parser:
         Statement → IfStmt | RepeatStmt | ReadStmt | WriteStmt | AssignStmt | ExprStmt
         """
         if not self.current_token:
-            raise ParseError("Unexpected end of input", self.position)
+            raise ParseError("Unexpected end of input", self.position, 1, 1)
         
         token_type = self.current_token.type
 
@@ -141,7 +145,9 @@ class Parser:
         while self.current_token and self.current_token.type not in terminators:
             if self.current_token.type == TokenType.EOF:
                 terminator_names = ", ".join([str(t) for t in terminators])
-                raise ParseError(f"Expected one of {terminator_names} before end of file", self.position)
+                line = self.current_token.line if self.current_token else 1
+                column = self.current_token.column if self.current_token else 1
+                raise ParseError(f"Expected one of {terminator_names} before end of file", self.position, line, column)
             stmt = self.parse_statement()
             statements.append(stmt)
         return BlockNode(statements)
@@ -232,6 +238,8 @@ class Parser:
             raise ParseError(
                 "Unexpected end of input while parsing expression",
                 self.position,
+                0,
+                0,
             )
 
         if token.type == TokenType.NUMBER:
@@ -256,6 +264,8 @@ class Parser:
             raise ParseError(
                 f"Unexpected token in expression: {token.type} '{token.literal}'",
                 self.position,
+                token.line,
+                token.column,
             )
 
     def parse_infix_expression(self, left: ASTNode) -> ASTNode:
@@ -264,7 +274,7 @@ class Parser:
         Parses binary operations given left operand
         """
         if self.current_token is None:
-            raise ParseError("Unexpected end of input in infix expression", self.position)
+            raise ParseError("Unexpected end of input in infix expression", self.position, 0, 0)
         
         operator = self.current_token.literal
         precedence = self.current_precedence()

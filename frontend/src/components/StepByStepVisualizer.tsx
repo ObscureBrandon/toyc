@@ -48,7 +48,10 @@ export function StepByStepVisualizer({
       setTraceData(response);
 
       if (!response.success && response.error) {
-        setError(response.error);
+        const errorMsg = response.error_line !== undefined && response.error_column !== undefined
+          ? `Error at line ${response.error_line}, column ${response.error_column}: ${response.error}`
+          : response.error;
+        setError(errorMsg);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to trace code");
@@ -354,6 +357,18 @@ export function StepByStepVisualizer({
                          'type' in currentStepData.state.ast_node && 
                          currentStepData.state.ast_node.type === 'Error' && (
                           <div className="mt-3 space-y-2 text-xs">
+                            {'position' in currentStepData.state.ast_node && 
+                             typeof currentStepData.state.ast_node.position === 'object' &&
+                             currentStepData.state.ast_node.position !== null &&
+                             'line' in currentStepData.state.ast_node.position && 
+                             'col' in currentStepData.state.ast_node.position && (
+                              <div>
+                                <span className="font-semibold">Location: </span>
+                                <span className="font-mono">
+                                  line {currentStepData.state.ast_node.position.line as number}, column {currentStepData.state.ast_node.position.col as number}
+                                </span>
+                              </div>
+                            )}
                             {'expected' in currentStepData.state.ast_node && 
                              Array.isArray(currentStepData.state.ast_node.expected) && 
                              currentStepData.state.ast_node.expected.length > 0 && (

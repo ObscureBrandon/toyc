@@ -205,8 +205,13 @@ class ErrorNode(ASTNode):
 class ParseError(Exception):
     """Parser error with position information"""
 
-    def __init__(self, message: str, position: int = 0):
+    def __init__(self, message: str, position: int = 0, line: int = 0, column: int = 0):
         self.message = message
         self.position = position
-        super().__init__(f"{message} at position {position}")
+        self.line = line
+        self.column = column
+        if line > 0 and column > 0:
+            super().__init__(f"{message} at line {line}, column {column}")
+        else:
+            super().__init__(f"{message} at position {position}")
 

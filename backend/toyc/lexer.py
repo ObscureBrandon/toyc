@@ -7,6 +7,8 @@ class Lexer:
         self.position: int = 0
         self.read_position: int = 0
         self.ch: str = ""
+        self.line: int = 1
+        self.column: int = 0
         self.read_char()
 
     def read_char(self):
@@ -17,9 +19,15 @@ class Lexer:
 
         self.position = self.read_position
         self.read_position += 1
+        
+        if self.ch == "\n":
+            self.line += 1
+            self.column = 0
+        else:
+            self.column += 1
 
     def _new_token(self, type: TokenType, literal: str) -> Token:
-        token = Token(type, literal)
+        token = Token(type, literal, self.line, self.column - len(literal) + 1, self.position - len(literal) + 1, self.position)
         return token
 
     def is_whitespace(self, ch: str) -> bool:
@@ -51,17 +59,21 @@ class Lexer:
         else:
             return self.input[self.read_position]
 
-    def read_identifier(self) -> str:
+    def read_identifier(self) -> tuple[str, int, int]:
         start_position = self.position
+        start_line = self.line
+        start_column = self.column
         while self.ch.isalpha():
             self.read_char()
-        return self.input[start_position : self.position]
+        return self.input[start_position : self.position], start_line, start_column
 
-    def read_number(self) -> str:
+    def read_number(self) -> tuple[str, int, int]:
         start_position = self.position
+        start_line = self.line
+        start_column = self.column
         while self.ch.isdigit():
             self.read_char()
-        return self.input[start_position : self.position]
+        return self.input[start_position : self.position], start_line, start_column
 
     def next_token(self) -> Token:
         self.skip_whitespace()
@@ -154,31 +166,38 @@ class Lexer:
                 token = self._new_token(TokenType.EOF, "")
             case _:
                 if self.is_letter(self.ch):
-                    literal = self.read_identifier()
+                    literal, start_line, start_column = self.read_identifier()
                     token_type = lookup_identifier(literal)
-                    token = self._new_token(token_type, literal)
+                    start_pos = self.position - len(literal)
+                    end_pos = self.position - 1
+                    token = Token(token_type, literal, start_line, start_column, start_pos, end_pos)
                     return token
                 elif self.is_digit(self.ch):
-                    literal = self.read_number()
+                    literal, start_line, start_column = self.read_number()
+                    start_pos = self.position - len(literal)
                     if self.ch == ".":
                         self.read_char()
-                        fractional = self.read_number()
+                        fractional, _, _ = self.read_number()
                         literal += "." + fractional
                         if self.is_letter(self.ch):
                             while self.is_letter(self.ch) or self.is_digit(self.ch):
                                 literal += self.ch
                                 self.read_char()
-                            token = self._new_token(TokenType.ILLEGAL, literal)
+                            end_pos = self.position - 1
+                            token = Token(TokenType.ILLEGAL, literal, start_line, start_column, start_pos, end_pos)
                         else:
-                            token = self._new_token(TokenType.FLOAT, literal)
+                            end_pos = self.position - 1
+                            token = Token(TokenType.FLOAT, literal, start_line, start_column, start_pos, end_pos)
                     else:
                         if self.is_letter(self.ch):
                             while self.is_letter(self.ch) or self.is_digit(self.ch):
                                 literal += self.ch
                                 self.read_char()
-                            token = self._new_token(TokenType.ILLEGAL, literal)
+                            end_pos = self.position - 1
+                            token = Token(TokenType.ILLEGAL, literal, start_line, start_column, start_pos, end_pos)
                         else:
-                            token = self._new_token(TokenType.NUMBER, literal)
+                            end_pos = self.position - 1
+                            token = Token(TokenType.NUMBER, literal, start_line, start_column, start_pos, end_pos)
                     return token
                 else:
                     token = self._new_token(TokenType.ILLEGAL, self.ch)

@@ -44,12 +44,24 @@ class TokenType(str, Enum):
 
 
 class Token:
-    def __init__(self, type: TokenType, literal: str):
+    def __init__(
+        self, 
+        type: TokenType, 
+        literal: str,
+        line: int = 1,
+        column: int = 1,
+        start_pos: int = 0,
+        end_pos: int = 0
+    ):
         self.type: TokenType = type
         self.literal: str = literal
+        self.line: int = line
+        self.column: int = column
+        self.start_pos: int = start_pos
+        self.end_pos: int = end_pos
 
     def __repr__(self):
-        return f"Token(type={self.type}, literal='{self.literal}')"
+        return f"Token(type={self.type}, literal='{self.literal}', line={self.line}, col={self.column})"
 
 
 KEYWORDS = {

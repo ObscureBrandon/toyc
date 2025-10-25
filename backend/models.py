@@ -10,6 +10,8 @@ class TokenResponse(BaseModel):
     type: str
     literal: str
     position: int
+    line: int
+    column: int
 
 
 class LexerResponse(BaseModel):
@@ -32,6 +34,8 @@ class ParserResponse(BaseModel):
     success: bool
     error: Optional[str] = None
     error_position: Optional[int] = None
+    error_line: Optional[int] = None
+    error_column: Optional[int] = None
 
 
 class TraceRequest(BaseModel):
@@ -55,3 +59,6 @@ class TraceResponse(BaseModel):
     analyzed_ast: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
     error_phase: Optional[str] = None  # 'lexing', 'parsing', or 'semantic_analysis'
+    error_line: Optional[int] = None
+    error_column: Optional[int] = None
+    error_position: Optional[int] = None

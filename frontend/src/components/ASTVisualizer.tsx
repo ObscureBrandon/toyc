@@ -20,6 +20,8 @@ import '@xyflow/react/dist/style.css';
 interface ASTVisualizerProps {
   ast: ASTNode | null;
   error?: string;
+  error_line?: number;
+  error_column?: number;
 }
 
 interface FlowNode extends Node {
@@ -239,7 +241,7 @@ const getLayoutedElements = (nodes: FlowNode[], edges: Edge[]) => {
   return { nodes: layoutedNodes, edges };
 };
 
-export default function ASTVisualizer({ ast, error }: ASTVisualizerProps) {
+export default function ASTVisualizer({ ast, error, error_line, error_column }: ASTVisualizerProps) {
   const { nodes: flowNodes, edges: flowEdges } = useMemo(() => {
     if (!ast || !ast.data) return { nodes: [], edges: [] };
     
@@ -262,11 +264,15 @@ export default function ASTVisualizer({ ast, error }: ASTVisualizerProps) {
   }, [flowNodes, flowEdges, setNodes, setEdges]);
 
   if (error) {
+    const errorMessage = error_line !== undefined && error_column !== undefined
+      ? `Error at line ${error_line}, column ${error_column}: ${error}`
+      : error;
+    
     return (
       <div className="w-full h-full bg-gray-900 border border-gray-700 rounded-lg p-6 flex items-center justify-center">
         <div className="text-center">
           <div className="text-red-400 text-lg font-medium mb-2">Parser Error</div>
-          <div className="text-gray-300 text-sm">{error}</div>
+          <div className="text-gray-300 text-sm">{errorMessage}</div>
         </div>
       </div>
     );

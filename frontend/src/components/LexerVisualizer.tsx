@@ -152,6 +152,12 @@ result = x / 2`;
                           Position
                         </th>
                         <th className="text-left py-3 px-4 font-semibold text-gray-300">
+                          Line
+                        </th>
+                        <th className="text-left py-3 px-4 font-semibold text-gray-300">
+                          Column
+                        </th>
+                        <th className="text-left py-3 px-4 font-semibold text-gray-300">
                           Type
                         </th>
                         <th className="text-left py-3 px-4 font-semibold text-gray-300">
@@ -167,6 +173,12 @@ result = x / 2`;
                         >
                           <td className="py-3 px-4 font-mono text-gray-400">
                             {token.position}
+                          </td>
+                          <td className="py-3 px-4 font-mono text-gray-400">
+                            {token.line}
+                          </td>
+                          <td className="py-3 px-4 font-mono text-gray-400">
+                            {token.column}
                           </td>
                           <td className="py-3 px-4 font-mono font-medium text-gray-200">
                             {token.type}

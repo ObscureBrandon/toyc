@@ -4,6 +4,8 @@ export interface Token {
   type: string;
   literal: string;
   position: number;
+  line: number;
+  column: number;
 }
 
 export interface LexerResponse {
@@ -45,6 +47,8 @@ export interface ParserResponse {
   success: boolean;
   error?: string;
   error_position?: number;
+  error_line?: number;
+  error_column?: number;
 }
 
 export interface ParserRequest {
@@ -68,6 +72,9 @@ export interface TraceResponse {
   analyzed_ast?: ASTNode;
   error?: string;
   error_phase?: string; // 'lexing', 'parsing', 'semantic_analysis'
+  error_line?: number;
+  error_column?: number;
+  error_position?: number;
 }
 
 export interface TraceRequest {
