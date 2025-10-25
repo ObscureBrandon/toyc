@@ -16,6 +16,38 @@ from .ast import (
     ParseError,
 )
 
+# Operator precedence levels (higher = tighter binding)
+LOWEST = 0
+OR_PREC = 1
+AND_PREC = 2
+COMPARISON_PREC = 3
+ADDITIVE_PREC = 4
+MULTIPLICATIVE_PREC = 5
+
+PRECEDENCES = {
+    TokenType.OR: OR_PREC,
+    TokenType.AND: AND_PREC,
+    TokenType.EQ: COMPARISON_PREC,
+    TokenType.NEQ: COMPARISON_PREC,
+    TokenType.LT: COMPARISON_PREC,
+    TokenType.GT: COMPARISON_PREC,
+    TokenType.LT_EQ: COMPARISON_PREC,
+    TokenType.GT_EQ: COMPARISON_PREC,
+    TokenType.PLUS: ADDITIVE_PREC,
+    TokenType.MINUS: ADDITIVE_PREC,
+    TokenType.ASTERISK: MULTIPLICATIVE_PREC,
+    TokenType.SLASH: MULTIPLICATIVE_PREC,
+    TokenType.PERCENT: MULTIPLICATIVE_PREC,
+}
+
+INFIX_OPERATORS = {
+    TokenType.OR, TokenType.AND,
+    TokenType.EQ, TokenType.NEQ, 
+    TokenType.LT, TokenType.GT, TokenType.LT_EQ, TokenType.GT_EQ,
+    TokenType.PLUS, TokenType.MINUS,
+    TokenType.ASTERISK, TokenType.SLASH, TokenType.PERCENT,
+}
+
 
 class Parser:
     """Recursive descent parser for ToyC language"""
@@ -47,6 +79,18 @@ class Parser:
         token = self.current_token
         self.advance()
         return token
+
+    def current_precedence(self) -> int:
+        """Get precedence of current token"""
+        if self.current_token:
+            return PRECEDENCES.get(self.current_token.type, LOWEST)
+        return LOWEST
+
+    def peek_precedence(self) -> int:
+        """Get precedence of peek token"""
+        if self.peek_token:
+            return PRECEDENCES.get(self.peek_token.type, LOWEST)
+        return LOWEST
 
     def parse_program(self) -> ProgramNode:
         """
@@ -85,8 +129,7 @@ class Parser:
             return self.parse_assignment()
         else:
             expr = self.parse_expression()
-            if self.current_token and self.current_token.type == TokenType.SEMICOLON:
-                self.advance()
+            self.expect_token(TokenType.SEMICOLON)
             return expr
 
     def parse_block(self, terminators: list[TokenType]) -> BlockNode:
@@ -165,93 +208,29 @@ class Parser:
         self.expect_token(TokenType.SEMICOLON)
         return AssignmentNode(identifier_token.literal, value)
 
-    def parse_expression(self) -> ASTNode:
+    def parse_expression(self, precedence: int = LOWEST) -> ASTNode:
         """
-        Expression → OrExpr
+        Pratt parser for expressions with precedence climbing
+        Expression → Prefix (Infix Prefix)*
         """
-        return self.parse_or_expression()
+        left = self.parse_prefix()
 
-    def parse_or_expression(self) -> ASTNode:
-        """
-        OrExpr → AndExpr (OR AndExpr)*
-        """
-        left = self.parse_and_expression()
-
-        while self.current_token and self.current_token.type == TokenType.OR:
-            operator = self.current_token.literal
-            self.advance()
-            right = self.parse_and_expression()
-            left = BinaryOpNode(operator, left, right)
+        while self.current_token and self.current_precedence() > precedence:
+            if self.current_token.type not in INFIX_OPERATORS:
+                return left
+            
+            left = self.parse_infix_expression(left)
 
         return left
 
-    def parse_and_expression(self) -> ASTNode:
+    def parse_prefix(self) -> ASTNode:
         """
-        AndExpr → CompExpr (AND CompExpr)*
-        """
-        left = self.parse_comparison()
-
-        while self.current_token and self.current_token.type == TokenType.AND:
-            operator = self.current_token.literal
-            self.advance()
-            right = self.parse_comparison()
-            left = BinaryOpNode(operator, left, right)
-
-        return left
-
-    def parse_comparison(self) -> ASTNode:
-        """
-        CompExpr → AddExpr ((LT | GT | LT_EQ | GT_EQ | EQ | NEQ) AddExpr)*
-        """
-        left = self.parse_additive()
-
-        while self.current_token and self.current_token.type in [
-            TokenType.LT, TokenType.GT, TokenType.LT_EQ, 
-            TokenType.GT_EQ, TokenType.EQ, TokenType.NEQ
-        ]:
-            operator = self.current_token.literal
-            self.advance()
-            right = self.parse_additive()
-            left = BinaryOpNode(operator, left, right)
-
-        return left
-
-    def parse_additive(self) -> ASTNode:
-        """
-        AddExpr → Term ((PLUS | MINUS) Term)*
-        """
-        left = self.parse_term()
-
-        while self.current_token and self.current_token.type in [TokenType.PLUS, TokenType.MINUS]:
-            operator = self.current_token.literal
-            self.advance()
-            right = self.parse_term()
-            left = BinaryOpNode(operator, left, right)
-
-        return left
-
-    def parse_term(self) -> ASTNode:
-        """
-        Term → Factor ((ASTERISK | SLASH | PERCENT) Factor)*
-        """
-        left = self.parse_factor()
-
-        while self.current_token and self.current_token.type in [TokenType.ASTERISK, TokenType.SLASH, TokenType.PERCENT]:
-            operator = self.current_token.literal
-            self.advance()
-            right = self.parse_factor()
-            left = BinaryOpNode(operator, left, right)
-
-        return left
-
-    def parse_factor(self) -> ASTNode:
-        """
-        Factor → NUMBER | FLOAT | IDENTIFIER | LPAREN Expression RPAREN
+        Prefix → NUMBER | FLOAT | IDENTIFIER | LPAREN Expression RPAREN
         """
         token = self.current_token
         if token is None:
             raise ParseError(
-                "Unexpected end of input while parsing factor",
+                "Unexpected end of input while parsing expression",
                 self.position,
             )
 
@@ -268,16 +247,30 @@ class Parser:
             return IdentifierNode(token.literal)
 
         elif token.type == TokenType.LPAREN:
-            self.advance()  # consume '('
+            self.advance()
             expr = self.parse_expression()
-            self.expect_token(TokenType.RPAREN)  # consume ')'
+            self.expect_token(TokenType.RPAREN)
             return expr
 
         else:
             raise ParseError(
-                f"Unexpected token in factor: {token.type} '{token.literal}'",
+                f"Unexpected token in expression: {token.type} '{token.literal}'",
                 self.position,
             )
+
+    def parse_infix_expression(self, left: ASTNode) -> ASTNode:
+        """
+        Infix → left OPERATOR right
+        Parses binary operations given left operand
+        """
+        if self.current_token is None:
+            raise ParseError("Unexpected end of input in infix expression", self.position)
+        
+        operator = self.current_token.literal
+        precedence = self.current_precedence()
+        self.advance()
+        right = self.parse_expression(precedence)
+        return BinaryOpNode(operator, left, right)
 
 
 def parse_code(source_code: str) -> ProgramNode:

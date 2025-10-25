@@ -669,6 +669,39 @@ class TracingLexer(Lexer):
         return token
 
 
+# Operator precedence levels (higher = tighter binding)
+LOWEST = 0
+OR_PREC = 1
+AND_PREC = 2
+COMPARISON_PREC = 3
+ADDITIVE_PREC = 4
+MULTIPLICATIVE_PREC = 5
+
+PRECEDENCES = {
+    TokenType.OR: OR_PREC,
+    TokenType.AND: AND_PREC,
+    TokenType.EQ: COMPARISON_PREC,
+    TokenType.NEQ: COMPARISON_PREC,
+    TokenType.LT: COMPARISON_PREC,
+    TokenType.GT: COMPARISON_PREC,
+    TokenType.LT_EQ: COMPARISON_PREC,
+    TokenType.GT_EQ: COMPARISON_PREC,
+    TokenType.PLUS: ADDITIVE_PREC,
+    TokenType.MINUS: ADDITIVE_PREC,
+    TokenType.ASTERISK: MULTIPLICATIVE_PREC,
+    TokenType.SLASH: MULTIPLICATIVE_PREC,
+    TokenType.PERCENT: MULTIPLICATIVE_PREC,
+}
+
+INFIX_OPERATORS = {
+    TokenType.OR, TokenType.AND,
+    TokenType.EQ, TokenType.NEQ, 
+    TokenType.LT, TokenType.GT, TokenType.LT_EQ, TokenType.GT_EQ,
+    TokenType.PLUS, TokenType.MINUS,
+    TokenType.ASTERISK, TokenType.SLASH, TokenType.PERCENT,
+}
+
+
 class TracingParser:
     """Extended parser that records step-by-step execution"""
 
@@ -723,6 +756,18 @@ class TracingParser:
                 "node_type": type(node).__name__,
             },
         )
+
+    def current_precedence(self) -> int:
+        """Get precedence of current token"""
+        if self.current_token:
+            return PRECEDENCES.get(self.current_token.type, LOWEST)
+        return LOWEST
+
+    def peek_precedence(self) -> int:
+        """Get precedence of peek token"""
+        if self.peek_token:
+            return PRECEDENCES.get(self.peek_token.type, LOWEST)
+        return LOWEST
 
     def advance(self):
         """Move to the next token"""
@@ -875,9 +920,12 @@ class TracingParser:
                 },
             )
             expr = self.parse_expression()
-            if self.current_token and self.current_token.type == TokenType.SEMICOLON:
-                self.trace_step("Consuming statement-terminating semicolon", {"action": "consume_semicolon"})
-                self.advance()
+            
+            self.trace_step("Expecting statement-terminating semicolon", {"action": "expect_semicolon"})
+            if not self.current_token or self.current_token.type != TokenType.SEMICOLON:
+                raise ParseError("Expected ';' after expression statement", self.position)
+            self.advance()
+            
             return expr
 
     def parse_assignment(self) -> AssignmentNode:
@@ -998,7 +1046,7 @@ class TracingParser:
         )
         self.advance()
         
-        condition = self.parse_or_expression()
+        condition = self.parse_expression()
         
         if not self.current_token or self.current_token.type != TokenType.RPAREN:
             raise ParseError("Expected ')' after if condition", self.position)
@@ -1077,7 +1125,7 @@ class TracingParser:
         )
         self.advance()
         
-        condition = self.parse_or_expression()
+        condition = self.parse_expression()
         
         if not self.current_token or self.current_token.type != TokenType.SEMICOLON:
             raise ParseError("Expected ';' after until condition", self.position)
@@ -1155,7 +1203,7 @@ class TracingParser:
             {"action": "parse_write_expression"},
         )
         
-        expression = self.parse_or_expression()
+        expression = self.parse_expression()
         
         if not self.current_token or self.current_token.type != TokenType.SEMICOLON:
             raise ParseError("Expected ';' after write statement", self.position)
@@ -1174,256 +1222,58 @@ class TracingParser:
         
         return write_node
 
-    def parse_or_expression(self) -> ASTNode:
+    def parse_expression(self, precedence: int = LOWEST) -> ASTNode:
+        """
+        Pratt parser for expressions with precedence climbing
+        Expression → Prefix (Infix Prefix)*
+        """
         self.trace_step(
-            "Starting or-expression parsing",
-            {
-                "action": "start_or_expression",
-                "grammar_rule": "OrExpr → AndExpr (OR AndExpr)*",
-            },
-        )
-        
-        left = self.parse_and_expression()
-        
-        while self.current_token and self.current_token.type == TokenType.OR:
-            operator = self.current_token.literal
-            
-            self.trace_step(
-                f"Found OR operator: '{operator}'",
-                {
-                    "operator": operator,
-                    "action": "detect_or_op",
-                    "left_type": type(left).__name__,
-                },
-            )
-            
-            self.advance()
-            
-            or_node_id = self.get_next_node_id()
-            self.node_stack.append(or_node_id)
-            
-            right = self.parse_and_expression()
-            
-            self.node_stack.pop()
-            
-            left = BinaryOpNode(operator, left, right)
-            
-            self.trace_ast_node_creation(
-                f"Created OR operation node",
-                left,
-                or_node_id,
-                self.node_stack[-1] if self.node_stack else None,
-            )
-        
-        return left
-
-    def parse_and_expression(self) -> ASTNode:
-        self.trace_step(
-            "Starting and-expression parsing",
-            {
-                "action": "start_and_expression",
-                "grammar_rule": "AndExpr → Comparison (AND Comparison)*",
-            },
-        )
-        
-        left = self.parse_comparison()
-        
-        while self.current_token and self.current_token.type == TokenType.AND:
-            operator = self.current_token.literal
-            
-            self.trace_step(
-                f"Found AND operator: '{operator}'",
-                {
-                    "operator": operator,
-                    "action": "detect_and_op",
-                    "left_type": type(left).__name__,
-                },
-            )
-            
-            self.advance()
-            
-            and_node_id = self.get_next_node_id()
-            self.node_stack.append(and_node_id)
-            
-            right = self.parse_comparison()
-            
-            self.node_stack.pop()
-            
-            left = BinaryOpNode(operator, left, right)
-            
-            self.trace_ast_node_creation(
-                f"Created AND operation node",
-                left,
-                and_node_id,
-                self.node_stack[-1] if self.node_stack else None,
-            )
-        
-        return left
-
-    def parse_comparison(self) -> ASTNode:
-        self.trace_step(
-            "Starting comparison parsing",
-            {
-                "action": "start_comparison",
-                "grammar_rule": "Comparison → Expression ((EQ | NEQ | LT | GT | LT_EQ | GT_EQ) Expression)?",
-            },
-        )
-        
-        left = self.parse_expression()
-        
-        if self.current_token and self.current_token.type in [
-            TokenType.EQ,
-            TokenType.NEQ,
-            TokenType.LT,
-            TokenType.GT,
-            TokenType.LT_EQ,
-            TokenType.GT_EQ,
-        ]:
-            operator = self.current_token.literal
-            
-            self.trace_step(
-                f"Found comparison operator: '{operator}'",
-                {
-                    "operator": operator,
-                    "action": "detect_comparison_op",
-                    "left_type": type(left).__name__,
-                },
-            )
-            
-            self.advance()
-            
-            comp_node_id = self.get_next_node_id()
-            self.node_stack.append(comp_node_id)
-            
-            right = self.parse_expression()
-            
-            self.node_stack.pop()
-            
-            left = BinaryOpNode(operator, left, right)
-            
-            self.trace_ast_node_creation(
-                f"Created comparison node: {operator}",
-                left,
-                comp_node_id,
-                self.node_stack[-1] if self.node_stack else None,
-            )
-        
-        return left
-
-
-    def parse_expression(self) -> ASTNode:
-        """Parse expression with addition/subtraction"""
-        self.trace_step(
-            "Starting expression parsing",
+            f"Starting expression parsing with precedence {precedence}",
             {
                 "action": "start_expression",
-                "grammar_rule": "Expression → Term ((PLUS | MINUS) Term)*",
+                "precedence": precedence,
+                "grammar_rule": "Expression → Prefix (Infix Prefix)*",
             },
         )
 
-        left = self.parse_term()
+        left = self.parse_prefix()
 
-        while self.current_token and self.current_token.type in [
-            TokenType.PLUS,
-            TokenType.MINUS,
-        ]:
-            operator = self.current_token.literal
-
+        while self.current_token and self.current_precedence() > precedence:
+            if self.current_token.type not in INFIX_OPERATORS:
+                return left
+            
             self.trace_step(
-                f"Found binary operator: '{operator}'",
+                f"Found infix operator with precedence {self.current_precedence()}",
                 {
-                    "operator": operator,
-                    "action": "detect_binary_op",
-                    "left_type": type(left).__name__,
+                    "operator": self.current_token.literal,
+                    "operator_precedence": self.current_precedence(),
+                    "current_precedence": precedence,
+                    "action": "detect_infix",
                 },
             )
-
-            self.advance()
-
-            # Push current node context for parent tracking
-            binary_node_id = self.get_next_node_id()
-            self.node_stack.append(binary_node_id)
-
-            right = self.parse_term()
-
-            # Pop the node context
-            self.node_stack.pop()
-
-            left = BinaryOpNode(operator, left, right)
-
-            self.trace_ast_node_creation(
-                f"Created binary operation node: ... {operator} ...",
-                left,
-                binary_node_id,
-                self.node_stack[-1] if self.node_stack else None,
-            )
+            
+            left = self.parse_infix_expression(left)
 
         return left
 
-    def parse_term(self) -> ASTNode:
-        """Parse term with multiplication/division"""
-        self.trace_step(
-            "Starting term parsing",
-            {
-                "action": "start_term",
-                "grammar_rule": "Term → Factor ((ASTERISK | SLASH | PERCENT) Factor)*",
-            },
-        )
-
-        left = self.parse_factor()
-
-        while self.current_token and self.current_token.type in [
-            TokenType.ASTERISK,
-            TokenType.SLASH,
-            TokenType.PERCENT,
-        ]:
-            operator = self.current_token.literal
-
-            self.trace_step(
-                f"Found term operator: '{operator}'",
-                {
-                    "operator": operator,
-                    "action": "detect_term_op",
-                    "left_type": type(left).__name__,
-                },
-            )
-
-            self.advance()
-
-            # Push current node context for parent tracking
-            term_node_id = self.get_next_node_id()
-            self.node_stack.append(term_node_id)
-
-            right = self.parse_factor()
-
-            # Pop the node context
-            self.node_stack.pop()
-
-            left = BinaryOpNode(operator, left, right)
-
-            self.trace_ast_node_creation(
-                f"Created term operation node: ... {operator} ...",
-                left,
-                term_node_id,
-                self.node_stack[-1] if self.node_stack else None,
-            )
-
-        return left
-
-    def parse_factor(self) -> ASTNode:
-        """Parse factor (number, float, identifier, or parenthesized expression)"""
+    def parse_prefix(self) -> ASTNode:
+        """
+        Prefix → NUMBER | FLOAT | IDENTIFIER | LPAREN Expression RPAREN
+        """
         token = self.current_token
-
-        if not token:
-            raise ParseError("Unexpected end of input in factor", self.position)
+        if token is None:
+            raise ParseError(
+                "Unexpected end of input while parsing expression",
+                self.position,
+            )
 
         self.trace_step(
-            f"Parsing factor: {token.type.name} '{token.literal}'",
+            f"Parsing prefix: {token.type.name} '{token.literal}'",
             {
                 "token_type": token.type.name,
                 "literal": token.literal,
-                "action": "start_factor",
-                "grammar_rule": "Factor → NUMBER | FLOAT | IDENTIFIER | LPAREN Expression RPAREN",
+                "action": "start_prefix",
+                "grammar_rule": "Prefix → NUMBER | FLOAT | IDENTIFIER | LPAREN Expression RPAREN",
             },
         )
 
@@ -1471,14 +1321,14 @@ class TracingParser:
                 "Found parenthesized expression", {"action": "start_parentheses"}
             )
 
-            self.advance()  # consume '('
+            self.advance()
             expr = self.parse_expression()
 
             if not self.current_token or self.current_token.type != TokenType.RPAREN:
                 current_type = self.current_token.type if self.current_token else "EOF"
                 raise ParseError(f"Expected ')', got {current_type}", self.position)
 
-            self.advance()  # consume ')'
+            self.advance()
 
             self.trace_step(
                 "Completed parenthesized expression", {"action": "complete_parentheses"}
@@ -1487,18 +1337,51 @@ class TracingParser:
             return expr
 
         else:
-            error_msg = (
-                f"Unexpected token in factor: {token.type.name} '{token.literal}'"
+            raise ParseError(
+                f"Unexpected token in expression: {token.type} '{token.literal}'",
+                self.position,
             )
-            self.trace_step(
-                error_msg,
-                {
-                    "token_type": token.type.name,
-                    "literal": token.literal,
-                    "action": "parse_error",
-                },
-            )
-            raise ParseError(error_msg, self.position)
+
+    def parse_infix_expression(self, left: ASTNode) -> ASTNode:
+        """
+        Infix → left OPERATOR right
+        Parses binary operations given left operand
+        """
+        if self.current_token is None:
+            raise ParseError("Unexpected end of input in infix expression", self.position)
+        
+        operator = self.current_token.literal
+        precedence = self.current_precedence()
+        
+        self.trace_step(
+            f"Parsing infix operation: '{operator}'",
+            {
+                "operator": operator,
+                "precedence": precedence,
+                "left_type": type(left).__name__,
+                "action": "parse_infix",
+            },
+        )
+        
+        self.advance()
+        
+        binary_node_id = self.get_next_node_id()
+        self.node_stack.append(binary_node_id)
+        
+        right = self.parse_expression(precedence)
+        
+        self.node_stack.pop()
+        
+        node = BinaryOpNode(operator, left, right)
+        
+        self.trace_ast_node_creation(
+            f"Created binary operation node: ... {operator} ...",
+            node,
+            binary_node_id,
+            self.node_stack[-1] if self.node_stack else None,
+        )
+        
+        return node
 
 
 class TracingSemanticAnalyzer(SemanticAnalyzer):
