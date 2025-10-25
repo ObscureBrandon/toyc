@@ -1,0 +1,44 @@
+%% Example ToyC Program
+%% This demonstrates all language features
+
+%% Variable initialization
+x := 5;
+counter := 0;
+
+{ Multi-statement if-else blocks }
+if (x >= 3)
+  read y;
+  write y;
+  z := y + 1;
+else
+  write x % 2;
+  z := 0;
+end
+
+%% Multi-statement repeat-until loop
+repeat
+  counter := counter + 1;
+  temp := counter * 2;
+  write temp;
+until counter >= 10;
+
+%% Complex expressions with precedence
+result := 10 + 5 * 2 % 3;
+
+%% Logical operators with nested blocks
+if (x > 0 && y < 100 || result == 0)
+  write result;
+  if (result == 0)
+    write 999;
+  end
+end
+
+%% Nested repeat in if
+if (x > 0)
+  i := 0;
+  repeat
+    write i;
+    i := i + 1;
+  until i >= 5;
+  write x;
+end
