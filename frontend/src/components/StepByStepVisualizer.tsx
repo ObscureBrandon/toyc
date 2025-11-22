@@ -8,6 +8,7 @@ import { useStepByStep } from "@/hooks/useStepByStep";
 import { LexingPhase } from "./LexingPhase";
 import { ParsingWithAST } from "./ParsingWithAST";
 import { SemanticAnalysisPhase } from "./SemanticAnalysisPhase";
+import { ICGPhase } from "./ICGPhase";
 
 interface StepByStepVisualizerProps {
   initialCode?: string;
@@ -21,7 +22,7 @@ export function StepByStepVisualizer({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activePhase, setActivePhase] = useState<
-    "lexing" | "parsing" | "semantic-analysis"
+    "lexing" | "parsing" | "semantic-analysis" | "icg"
   >("lexing");
 
   const {
@@ -95,6 +96,7 @@ export function StepByStepVisualizer({
     "semantic-analysis": visibleSteps.filter(
       (s) => s.phase === "semantic-analysis",
     ).length,
+    icg: traceData && traceData.success ? 1 : 0, // ICG is shown once semantic analysis is complete
   };
 
   const totalPhaseSteps = {
@@ -106,6 +108,7 @@ export function StepByStepVisualizer({
     "semantic-analysis":
       traceData?.steps.filter((s) => s.phase === "semantic-analysis").length ||
       0,
+    icg: traceData && traceData.success ? 1 : 0, // ICG is a single-step phase
   };
 
   return (
@@ -117,7 +120,7 @@ export function StepByStepVisualizer({
         </h1>
         <p className="text-gray-600 dark:text-gray-400">
           Watch how your code is processed through lexing, parsing, AST
-          construction, and semantic analysis
+          construction, semantic analysis, and intermediate code generation
         </p>
       </div>
 
@@ -151,8 +154,8 @@ export function StepByStepVisualizer({
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
-              {(["lexing", "parsing", "semantic-analysis"] as const).map(
+            <div className="grid grid-cols-4 gap-4">
+              {(["lexing", "parsing", "semantic-analysis", "icg"] as const).map(
                 (phase) => (
                   <div
                     key={phase}
@@ -168,7 +171,9 @@ export function StepByStepVisualizer({
                         ? "Parsing & AST"
                         : phase === "semantic-analysis"
                           ? "Semantic Analysis"
-                          : phase}
+                          : phase === "icg"
+                            ? "Code Generation"
+                            : phase}
                     </div>
                     <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                       {phaseProgress[phase]} / {totalPhaseSteps[phase]} steps
@@ -295,6 +300,10 @@ export function StepByStepVisualizer({
                 currentStep={currentStepData}
                 analyzedAst={traceData?.analyzed_ast}
               />
+            )}
+
+            {activePhase === "icg" && (
+              <ICGPhase sourceCode={sourceCode} />
             )}
           </motion.div>
 

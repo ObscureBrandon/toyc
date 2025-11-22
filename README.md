@@ -126,7 +126,11 @@ Located in `backend/` directory.
 - Deployed on Render
 
 **Key Components:**
-- `toyc/` - Compiler package with lexer, token definitions
+- `toyc/` - Compiler package with lexer, parser, semantic analyzer, and ICG generator
+- `toyc/lexer.py` - Lexical analyzer
+- `toyc/parser.py` - Syntax analyzer (AST generation)
+- `toyc/semantic_analyzer.py` - Semantic analysis and type checking
+- `toyc/icg.py` - Intermediate code generator (three-address code)
 - `api.py` - FastAPI application with CORS support
 - `models.py` - Pydantic request/response schemas
 - `render.yaml` - Render deployment configuration
@@ -142,6 +146,9 @@ uv run uvicorn api:app --reload
 - `GET /` - API status
 - `GET /health` - Health check
 - `POST /api/lex` - Tokenize source code
+- `POST /api/parse` - Parse source code into AST
+- `POST /api/analyze` - Perform semantic analysis
+- `POST /api/icg` - Generate intermediate code (three-address code)
 
 ## Frontend (Next.js + TypeScript)
 
@@ -155,9 +162,13 @@ Located in `frontend/` directory.
 - Deployed on Vercel
 
 **Key Components:**
-- `src/components/LexerVisualizer.tsx` - Main visualization component
+- `src/components/LexerVisualizer.tsx` - Lexer visualization component
+- `src/components/ASTVisualizer.tsx` - AST visualization component
+- `src/components/ICGVisualizer.tsx` - Intermediate code generation visualizer (standalone)
+- `src/components/ICGPhase.tsx` - ICG phase in step-by-step visualizer
+- `src/components/StepByStepVisualizer.tsx` - Step-by-step compilation process
 - `src/lib/api.ts` - API client for backend communication
-- `src/app/page.tsx` - Homepage
+- `src/app/page.tsx` - Homepage with step-by-step visualizer
 
 **Development:**
 ```bash
@@ -168,18 +179,103 @@ bun dev
 
 ## Features
 
-### Current: Lexer Visualization
+### Compiler Pipeline Visualization
+
+#### 1. Lexical Analysis (Lexer)
 - Interactive source code input
 - Real-time tokenization
 - Color-coded token display by type
+- **Identifier mapping display** - shows how identifiers map to normalized forms (e.g., `x → id1`, `y → id2`)
+- **Normalized representation** - identifiers replaced with `id1`, `id2`, `id3`, etc.
 - Detailed token stream table
 - Error handling and loading states
 
-### Planned: Full Compiler Pipeline
-- Parser visualization (AST generation)
-- Semantic analysis display
-- Code generation output
-- Step-by-step compilation process
+#### 2. Syntax Analysis (Parser)
+- Abstract Syntax Tree (AST) visualization
+- Tree structure display with parent-child relationships
+- Node type identification
+- Position tracking in source code
+
+#### 3. Semantic Analysis
+- Type checking and validation
+- Annotated AST with type information
+- Error detection and reporting
+
+#### 4. Intermediate Code Generation (ICG)
+- Three-address code (TAC) generation
+- **Literal convention**: All literals prefixed with `#` (e.g., `#5`, `#3.14`)
+- Operations supported:
+  - Arithmetic: `+`, `-`, `*`, `/`, `%`
+  - Comparisons: `<`, `>`, `<=`, `>=`, `==`, `!=`
+  - Logical: `&&`, `||`
+  - Type conversion: `int2float`
+  - Control flow: `if_false`, `goto`, `label`
+  - I/O: `read`, `write`
+- Visualization features:
+  - Identifier mapping display (e.g., `x → id1`, `y → id2`)
+  - Table view with line numbers, operations, arguments, and results
+  - Code listing view with syntax highlighting
+  - Color-coded tokens:
+    - Pink: Literals (`#5`, `#3.14`)
+    - Green: Temp variables (`temp1`, `temp2`)
+    - Blue: Normalized identifiers (`id1`, `id2`)
+    - Orange: Labels (`L1`, `L2`)
+  - Statistics: instruction count, temp count, label count
+  - Interactive legend
+
+#### Example ICG Output
+
+**Input:**
+```
+x := 5 + 3 * 2;
+```
+
+**Three-Address Code:**
+```
+1. temp1 = #3 * #2
+2. temp2 = #5 + temp1
+3. id1 = temp2
+```
+
+**Identifier Mapping:** `x → id1`
+
+---
+
+**Input:**
+```
+x := 5;
+if (x >= 3) then
+  read y;
+else
+  write x % 2;
+end
+```
+
+**Three-Address Code:**
+```
+1. id1 = #5
+2. temp1 = id1 >= #3
+3. if_false temp1 goto L1
+4. read id2
+5. goto L2
+6. label L1:
+7. temp2 = id1 % #2
+8. write temp2
+9. label L2:
+```
+
+**Identifier Mapping:** `x → id1`, `y → id2`
+
+### Step-by-Step Visualization
+- Animated compilation process through all phases
+- Phase-by-phase breakdown:
+  - Lexing with token stream
+  - Parsing with AST generation
+  - Semantic analysis with type annotations
+  - Intermediate code generation (ICG) with three-address code
+- Interactive phase tabs to switch between compiler stages
+- Playback controls with speed adjustment
+- Progress tracking for each phase
 
 ## Deployment
 

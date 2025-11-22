@@ -19,7 +19,7 @@ class Lexer:
 
         self.position = self.read_position
         self.read_position += 1
-        
+
         if self.ch == "\n":
             self.line += 1
             self.column = 0
@@ -27,7 +27,14 @@ class Lexer:
             self.column += 1
 
     def _new_token(self, type: TokenType, literal: str) -> Token:
-        token = Token(type, literal, self.line, self.column - len(literal) + 1, self.position - len(literal) + 1, self.position)
+        token = Token(
+            type,
+            literal,
+            self.line,
+            self.column - len(literal) + 1,
+            self.position - len(literal) + 1,
+            self.position,
+        )
         return token
 
     def is_whitespace(self, ch: str) -> bool:
@@ -170,7 +177,14 @@ class Lexer:
                     token_type = lookup_identifier(literal)
                     start_pos = self.position - len(literal)
                     end_pos = self.position - 1
-                    token = Token(token_type, literal, start_line, start_column, start_pos, end_pos)
+                    token = Token(
+                        token_type,
+                        literal,
+                        start_line,
+                        start_column,
+                        start_pos,
+                        end_pos,
+                    )
                     return token
                 elif self.is_digit(self.ch):
                     literal, start_line, start_column = self.read_number()
@@ -184,20 +198,48 @@ class Lexer:
                                 literal += self.ch
                                 self.read_char()
                             end_pos = self.position - 1
-                            token = Token(TokenType.ILLEGAL, literal, start_line, start_column, start_pos, end_pos)
+                            token = Token(
+                                TokenType.ILLEGAL,
+                                literal,
+                                start_line,
+                                start_column,
+                                start_pos,
+                                end_pos,
+                            )
                         else:
                             end_pos = self.position - 1
-                            token = Token(TokenType.FLOAT, literal, start_line, start_column, start_pos, end_pos)
+                            token = Token(
+                                TokenType.FLOAT,
+                                literal,
+                                start_line,
+                                start_column,
+                                start_pos,
+                                end_pos,
+                            )
                     else:
                         if self.is_letter(self.ch):
                             while self.is_letter(self.ch) or self.is_digit(self.ch):
                                 literal += self.ch
                                 self.read_char()
                             end_pos = self.position - 1
-                            token = Token(TokenType.ILLEGAL, literal, start_line, start_column, start_pos, end_pos)
+                            token = Token(
+                                TokenType.ILLEGAL,
+                                literal,
+                                start_line,
+                                start_column,
+                                start_pos,
+                                end_pos,
+                            )
                         else:
                             end_pos = self.position - 1
-                            token = Token(TokenType.NUMBER, literal, start_line, start_column, start_pos, end_pos)
+                            token = Token(
+                                TokenType.NUMBER,
+                                literal,
+                                start_line,
+                                start_column,
+                                start_pos,
+                                end_pos,
+                            )
                     return token
                 else:
                     token = self._new_token(TokenType.ILLEGAL, self.ch)

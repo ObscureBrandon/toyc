@@ -424,9 +424,12 @@ export function AnimatedAST({ visibleSteps, currentStep }: AnimatedASTProps) {
         const childWidths = childEdges.map(edge => calculateSubtreeWidth(edge.target));
         const totalChildWidth = childWidths.reduce((sum, w) => sum + w, 0);
         
-        // Use the larger of: sum of child widths OR minimum spacing * child count
-        const minSpacingPerChild = 250;
-        return Math.max(totalChildWidth, childCount * minSpacingPerChild);
+        // Add minimum gaps between children (gap before, between, and after each child)
+        const minGap = 80;
+        const gapSpace = (childCount + 1) * minGap;
+        
+        // Total width = child widths + gap space
+        return totalChildWidth + gapSpace;
       };
       
      const positionSubtree = (nodeId: string, x: number, y: number, width: number) => {
@@ -443,7 +446,6 @@ export function AnimatedAST({ visibleSteps, currentStep }: AnimatedASTProps) {
           // Calculate width needed for each child based on its subtree
           const childWidths = childEdges.map(edge => calculateSubtreeWidth(edge.target));
           const totalChildWidth = childWidths.reduce((sum, w) => sum + w, 0);
-          const requiredWidth = Math.max(width, totalChildWidth);
           
           if (childCount === 1) {
             // Single child: center it
@@ -452,19 +454,23 @@ export function AnimatedAST({ visibleSteps, currentStep }: AnimatedASTProps) {
             const childY = y + 150;
             positionSubtree(childEdges[0].target, childX, childY, childWidth);
           } else {
-            // Multiple children: space them evenly with padding
-            const totalGaps = childCount + 1;
-            const availableForGaps = requiredWidth - totalChildWidth;
-            const gapSize = Math.max(50, availableForGaps / totalGaps);
+            // Multiple children: distribute with equal gaps
+            const minGap = 80;
             
-            // Position children left to right with gaps
-            let currentX = x - (requiredWidth / 2) + gapSize;
+            // Total space available for gaps (parent width - sum of child widths)
+            const totalGapSpace = width - totalChildWidth;
+            
+            // Divide gap space equally among (childCount + 1) gaps
+            const actualGap = Math.max(minGap, totalGapSpace / (childCount + 1));
+            
+            // Position children left to right with equal gaps
+            let currentX = x - (width / 2) + actualGap;
             childEdges.forEach((edge, index) => {
               const childWidth = childWidths[index];
               const childX = currentX + (childWidth / 2);
               const childY = y + 150;
               positionSubtree(edge.target, childX, childY, childWidth);
-              currentX += childWidth + gapSize;
+              currentX += childWidth + actualGap;
             });
           }
         }

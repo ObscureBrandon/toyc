@@ -1,0 +1,351 @@
+{
+  "type": "Program",
+  "statements": [
+    {
+      "type": "Assignment",
+      "identifier": "x",
+      "value": {
+        "type": "Number",
+        "value": 5
+      }
+    },
+    {
+      "type": "Assignment",
+      "identifier": "counter",
+      "value": {
+        "type": "Number",
+        "value": 0
+      }
+    },
+    {
+      "type": "If",
+      "condition": {
+        "type": "BinaryOp",
+        "operator": ">=",
+        "left": {
+          "type": "Identifier",
+          "name": "x"
+        },
+        "right": {
+          "type": "Number",
+          "value": 3
+        }
+      },
+      "then_branch": {
+        "type": "Block",
+        "statements": [
+          {
+            "type": "Read",
+            "identifier": "y"
+          },
+          {
+            "type": "Write",
+            "expression": {
+              "type": "Identifier",
+              "name": "y"
+            }
+          },
+          {
+            "type": "Assignment",
+            "identifier": "z",
+            "value": {
+              "type": "BinaryOp",
+              "operator": "+",
+              "left": {
+                "type": "Identifier",
+                "name": "y"
+              },
+              "right": {
+                "type": "Number",
+                "value": 1
+              }
+            }
+          }
+        ]
+      },
+      "else_branch": {
+        "type": "Block",
+        "statements": [
+          {
+            "type": "Write",
+            "expression": {
+              "type": "BinaryOp",
+              "operator": "%",
+              "left": {
+                "type": "Identifier",
+                "name": "x"
+              },
+              "right": {
+                "type": "Number",
+                "value": 2
+              }
+            }
+          },
+          {
+            "type": "Assignment",
+            "identifier": "z",
+            "value": {
+              "type": "Number",
+              "value": 0
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "RepeatUntil",
+      "body": {
+        "type": "Block",
+        "statements": [
+          {
+            "type": "Assignment",
+            "identifier": "counter",
+            "value": {
+              "type": "BinaryOp",
+              "operator": "+",
+              "left": {
+                "type": "Identifier",
+                "name": "counter"
+              },
+              "right": {
+                "type": "Number",
+                "value": 1
+              }
+            }
+          },
+          {
+            "type": "Assignment",
+            "identifier": "temp",
+            "value": {
+              "type": "BinaryOp",
+              "operator": "*",
+              "left": {
+                "type": "Identifier",
+                "name": "counter"
+              },
+              "right": {
+                "type": "Number",
+                "value": 2
+              }
+            }
+          },
+          {
+            "type": "Write",
+            "expression": {
+              "type": "Identifier",
+              "name": "temp"
+            }
+          }
+        ]
+      },
+      "condition": {
+        "type": "BinaryOp",
+        "operator": ">=",
+        "left": {
+          "type": "Identifier",
+          "name": "counter"
+        },
+        "right": {
+          "type": "Number",
+          "value": 10
+        }
+      }
+    },
+    {
+      "type": "Assignment",
+      "identifier": "result",
+      "value": {
+        "type": "BinaryOp",
+        "operator": "+",
+        "left": {
+          "type": "Number",
+          "value": 10
+        },
+        "right": {
+          "type": "BinaryOp",
+          "operator": "%",
+          "left": {
+            "type": "BinaryOp",
+            "operator": "*",
+            "left": {
+              "type": "Number",
+              "value": 5
+            },
+            "right": {
+              "type": "Number",
+              "value": 2
+            }
+          },
+          "right": {
+            "type": "Number",
+            "value": 3
+          }
+        }
+      }
+    },
+    {
+      "type": "If",
+      "condition": {
+        "type": "BinaryOp",
+        "operator": "||",
+        "left": {
+          "type": "BinaryOp",
+          "operator": "&&",
+          "left": {
+            "type": "BinaryOp",
+            "operator": ">",
+            "left": {
+              "type": "Identifier",
+              "name": "x"
+            },
+            "right": {
+              "type": "Number",
+              "value": 0
+            }
+          },
+          "right": {
+            "type": "BinaryOp",
+            "operator": "<",
+            "left": {
+              "type": "Identifier",
+              "name": "y"
+            },
+            "right": {
+              "type": "Number",
+              "value": 100
+            }
+          }
+        },
+        "right": {
+          "type": "BinaryOp",
+          "operator": "==",
+          "left": {
+            "type": "Identifier",
+            "name": "result"
+          },
+          "right": {
+            "type": "Number",
+            "value": 0
+          }
+        }
+      },
+      "then_branch": {
+        "type": "Block",
+        "statements": [
+          {
+            "type": "Write",
+            "expression": {
+              "type": "Identifier",
+              "name": "result"
+            }
+          },
+          {
+            "type": "If",
+            "condition": {
+              "type": "BinaryOp",
+              "operator": "==",
+              "left": {
+                "type": "Identifier",
+                "name": "result"
+              },
+              "right": {
+                "type": "Number",
+                "value": 0
+              }
+            },
+            "then_branch": {
+              "type": "Block",
+              "statements": [
+                {
+                  "type": "Write",
+                  "expression": {
+                    "type": "Number",
+                    "value": 999
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "If",
+      "condition": {
+        "type": "BinaryOp",
+        "operator": ">",
+        "left": {
+          "type": "Identifier",
+          "name": "x"
+        },
+        "right": {
+          "type": "Number",
+          "value": 0
+        }
+      },
+      "then_branch": {
+        "type": "Block",
+        "statements": [
+          {
+            "type": "Assignment",
+            "identifier": "i",
+            "value": {
+              "type": "Number",
+              "value": 0
+            }
+          },
+          {
+            "type": "RepeatUntil",
+            "body": {
+              "type": "Block",
+              "statements": [
+                {
+                  "type": "Write",
+                  "expression": {
+                    "type": "Identifier",
+                    "name": "i"
+                  }
+                },
+                {
+                  "type": "Assignment",
+                  "identifier": "i",
+                  "value": {
+                    "type": "BinaryOp",
+                    "operator": "+",
+                    "left": {
+                      "type": "Identifier",
+                      "name": "i"
+                    },
+                    "right": {
+                      "type": "Number",
+                      "value": 1
+                    }
+                  }
+                }
+              ]
+            },
+            "condition": {
+              "type": "BinaryOp",
+              "operator": ">=",
+              "left": {
+                "type": "Identifier",
+                "name": "i"
+              },
+              "right": {
+                "type": "Number",
+                "value": 5
+              }
+            }
+          },
+          {
+            "type": "Write",
+            "expression": {
+              "type": "Identifier",
+              "name": "x"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

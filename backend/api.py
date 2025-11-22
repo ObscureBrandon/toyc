@@ -10,12 +10,17 @@ from models import (
     TraceRequest,
     TraceResponse,
     TraceStep,
+    ICGRequest,
+    ICGResponse,
+    ICGInstruction,
 )
 from toyc.lexer import Lexer
 from toyc.token import TokenType
 from toyc.parser import parse_code
 from toyc.ast import ParseError
 from toyc.tracer import trace_compilation
+from toyc.semantic_analyzer import SemanticAnalyzer
+from toyc.icg import ICGGenerator
 
 app = FastAPI(
     title="ToyC Compiler API",
@@ -66,7 +71,28 @@ async def lex_code(request: LexerRequest) -> LexerResponse:
         if tok.type == TokenType.EOF:
             break
 
-    return LexerResponse(tokens=tokens, source_code=request.source_code)
+    # Generate normalized representation
+    identifier_map: dict[str, str] = {}
+    identifier_counter = 1
+    normalized_parts: list[str] = []
+
+    for token in tokens:
+        if token.type == "IDENTIFIER":
+            if token.literal not in identifier_map:
+                identifier_map[token.literal] = f"id{identifier_counter}"
+                identifier_counter += 1
+            normalized_parts.append(identifier_map[token.literal])
+        elif token.type != "EOF":
+            normalized_parts.append(token.literal)
+
+    normalized_code = " ".join(normalized_parts)
+
+    return LexerResponse(
+        tokens=tokens,
+        source_code=request.source_code,
+        normalized_code=normalized_code,
+        identifier_mapping=identifier_map,
+    )
 
 
 @app.post("/api/parse", response_model=ParserResponse)
@@ -138,4 +164,64 @@ async def trace_code(request: TraceRequest) -> TraceResponse:
             source_code=request.source_code,
             success=False,
             error=f"Unexpected error: {str(e)}",
+        )
+
+
+@app.post("/api/icg", response_model=ICGResponse)
+async def generate_icg(request: ICGRequest) -> ICGResponse:
+    """Generate intermediate code (three-address code) from source code."""
+    try:
+        # Parse the source code
+        ast = parse_code(request.source_code)
+
+        # Perform semantic analysis
+        analyzer = SemanticAnalyzer()
+        analyzed_ast = analyzer.analyze(ast)
+
+        # Generate intermediate code
+        icg_gen = ICGGenerator()
+        instructions = icg_gen.generate(analyzed_ast)
+
+        # Convert to response format
+        icg_instructions = [
+            ICGInstruction(
+                op=instr.op,
+                arg1=instr.arg1,
+                arg2=instr.arg2,
+                result=instr.result,
+                label=instr.label,
+                instruction=str(instr),  # Include string representation
+            )
+            for instr in instructions
+        ]
+
+        return ICGResponse(
+            instructions=icg_instructions,
+            source_code=request.source_code,
+            success=True,
+            temp_count=icg_gen.temp_counter,
+            label_count=icg_gen.label_counter,
+            identifier_mapping=icg_gen.identifier_map,
+        )
+
+    except ParseError as e:
+        return ICGResponse(
+            instructions=[],
+            source_code=request.source_code,
+            success=False,
+            error=f"Parse error: {e.message}",
+            temp_count=0,
+            label_count=0,
+            identifier_mapping={},
+        )
+
+    except Exception as e:
+        return ICGResponse(
+            instructions=[],
+            source_code=request.source_code,
+            success=False,
+            error=f"Error: {str(e)}",
+            temp_count=0,
+            label_count=0,
+            identifier_mapping={},
         )

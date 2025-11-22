@@ -141,6 +141,54 @@ result = x / 2`;
 
             <div>
               <h2 className="text-2xl font-semibold mb-4 text-gray-200">
+                Identifier Mapping
+              </h2>
+              <div className="bg-gray-800/50 rounded-lg p-4 shadow-sm border border-gray-700/30">
+                <div className="flex flex-wrap gap-3">
+                  {Object.entries(result.identifier_mapping).map(
+                    ([original, normalized]) => (
+                      <div
+                        key={original}
+                        className="bg-blue-900/30 border border-blue-600/50 rounded-lg px-4 py-2 flex items-center gap-2"
+                      >
+                        <span className="font-mono text-sm text-gray-200 font-medium">
+                          {original}
+                        </span>
+                        <span className="text-gray-400">→</span>
+                        <span className="font-mono text-sm text-blue-400 font-semibold">
+                          {normalized}
+                        </span>
+                      </div>
+                    ),
+                  )}
+                  {Object.keys(result.identifier_mapping).length === 0 && (
+                    <div className="text-gray-400 text-sm">
+                      No identifiers found in source code
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h2 className="text-2xl font-semibold mb-4 text-gray-200">
+                Normalized Representation
+                <span className="ml-2 text-xs text-gray-400 font-normal">
+                  (identifiers normalized to id1, id2, id3...)
+                </span>
+              </h2>
+              <div className="bg-gray-800/50 rounded-lg p-4 shadow-sm border border-gray-700/30">
+                <div className="font-mono text-sm text-gray-200 whitespace-pre-wrap break-words">
+                  {result.normalized_code}
+                </div>
+              </div>
+              <div className="mt-2 text-xs text-gray-400">
+                Identifiers are replaced with id1, id2, id3... in order of first appearance
+              </div>
+            </div>
+
+            <div>
+              <h2 className="text-2xl font-semibold mb-4 text-gray-200">
                 Token Stream
               </h2>
               <div className="bg-gray-800/50 rounded-lg overflow-hidden shadow-sm border border-gray-700/30">

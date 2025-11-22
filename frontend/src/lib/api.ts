@@ -11,6 +11,8 @@ export interface Token {
 export interface LexerResponse {
   tokens: Token[];
   source_code: string;
+  normalized_code: string;
+  identifier_mapping: Record<string, string>;
 }
 
 export interface LexerRequest {
@@ -81,6 +83,29 @@ export interface TraceRequest {
   source_code: string;
 }
 
+export interface ICGInstruction {
+  op: string;
+  arg1?: string;
+  arg2?: string;
+  result?: string;
+  label?: string;
+  instruction: string;
+}
+
+export interface ICGResponse {
+  instructions: ICGInstruction[];
+  source_code: string;
+  success: boolean;
+  error?: string;
+  temp_count: number;
+  label_count: number;
+  identifier_mapping: Record<string, string>;
+}
+
+export interface ICGRequest {
+  source_code: string;
+}
+
 export class ApiClient {
   private baseUrl: string;
 
@@ -134,6 +159,22 @@ export class ApiClient {
     }
 
     return response.json() as Promise<TraceResponse>;
+  }
+
+  async generateICG(sourceCode: string): Promise<ICGResponse> {
+    const response = await fetch(`${this.baseUrl}/api/icg`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ source_code: sourceCode } as ICGRequest),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to generate ICG: ${response.statusText}`);
+    }
+
+    return response.json() as Promise<ICGResponse>;
   }
 
   async healthCheck(): Promise<{ status: string }> {

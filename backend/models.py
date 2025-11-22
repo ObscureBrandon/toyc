@@ -17,6 +17,8 @@ class TokenResponse(BaseModel):
 class LexerResponse(BaseModel):
     tokens: list[TokenResponse]
     source_code: str
+    normalized_code: str
+    identifier_mapping: Dict[str, str]
 
 
 class ParserRequest(BaseModel):
@@ -62,3 +64,32 @@ class TraceResponse(BaseModel):
     error_line: Optional[int] = None
     error_column: Optional[int] = None
     error_position: Optional[int] = None
+
+
+class ICGInstruction(BaseModel):
+    """Represents a single three-address code instruction."""
+
+    op: str
+    arg1: Optional[str] = None
+    arg2: Optional[str] = None
+    result: Optional[str] = None
+    label: Optional[str] = None
+    instruction: str  # String representation of the full instruction
+
+
+class ICGRequest(BaseModel):
+    """Request to generate intermediate code."""
+
+    source_code: str
+
+
+class ICGResponse(BaseModel):
+    """Response containing generated intermediate code."""
+
+    instructions: List[ICGInstruction]
+    source_code: str
+    success: bool
+    error: Optional[str] = None
+    temp_count: int
+    label_count: int
+    identifier_mapping: dict[str, str]  # Maps variable names to id1, id2, etc.

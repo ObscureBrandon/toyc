@@ -65,6 +65,29 @@ export function LexingPhase({
     }
   }
 
+  // Generate normalized representation
+  const generateNormalizedCode = () => {
+    const identifierMap: Record<string, string> = {};
+    let identifierCounter = 1;
+    const normalizedParts: string[] = [];
+
+    for (const token of completedTokens) {
+      if (token.type === "IDENTIFIER") {
+        if (!identifierMap[token.literal]) {
+          identifierMap[token.literal] = `id${identifierCounter}`;
+          identifierCounter += 1;
+        }
+        normalizedParts.push(identifierMap[token.literal]);
+      } else {
+        normalizedParts.push(token.literal);
+      }
+    }
+
+    return { normalizedCode: normalizedParts.join(" "), identifierMap };
+  };
+
+  const { normalizedCode, identifierMap } = generateNormalizedCode();
+
   const renderSourceCode = () => {
     const chars = sourceCode.split("");
 
@@ -337,6 +360,50 @@ export function LexingPhase({
               </motion.div>
             )}
           </AnimatePresence>
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border">
+        <h3 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">
+          Identifier Mapping
+        </h3>
+        <div className="flex flex-wrap gap-2">
+          {Object.entries(identifierMap).map(([original, normalized]) => (
+            <div
+              key={original}
+              className="bg-blue-50 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-600/50 rounded-lg px-3 py-2 flex items-center gap-2"
+            >
+              <span className="font-mono text-sm text-gray-900 dark:text-gray-100 font-medium">
+                {original}
+              </span>
+              <span className="text-gray-500 dark:text-gray-400">→</span>
+              <span className="font-mono text-sm text-blue-600 dark:text-blue-400 font-semibold">
+                {normalized}
+              </span>
+            </div>
+          ))}
+          {Object.keys(identifierMap).length === 0 && (
+            <div className="text-gray-500 dark:text-gray-400 text-sm">
+              No identifiers found yet
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border">
+        <h3 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">
+          Normalized Representation
+          <span className="ml-2 text-xs text-gray-500 dark:text-gray-400 font-normal">
+            (identifiers normalized)
+          </span>
+        </h3>
+        <div className="bg-gray-50 dark:bg-gray-900 p-3 rounded border">
+          <div className="font-mono text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words">
+            {normalizedCode || "Waiting for tokens..."}
+          </div>
+        </div>
+        <div className="mt-2 text-xs text-gray-600 dark:text-gray-400">
+          Identifiers are replaced with id1, id2, id3... in order of first appearance
         </div>
       </div>
 
