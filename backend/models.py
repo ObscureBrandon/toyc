@@ -93,3 +93,37 @@ class ICGResponse(BaseModel):
     temp_count: int
     label_count: int
     identifier_mapping: dict[str, str]  # Maps variable names to id1, id2, etc.
+
+
+class OptimizationStats(BaseModel):
+    """Statistics about optimizations performed."""
+    
+    original_instruction_count: int
+    optimized_instruction_count: int
+    instructions_saved: int
+    reduction_percentage: float
+    int2float_inlined: int
+    temps_eliminated: int
+    copies_propagated: int
+    algebraic_simplifications: int
+    dead_code_eliminated: int
+
+
+class OptimizationRequest(BaseModel):
+    """Request to optimize intermediate code."""
+    
+    source_code: str
+
+
+class OptimizationResponse(BaseModel):
+    """Response containing optimized intermediate code."""
+    
+    original_instructions: List[ICGInstruction]
+    optimized_instructions: List[ICGInstruction]
+    source_code: str
+    success: bool
+    error: Optional[str] = None
+    stats: Optional[OptimizationStats] = None
+    temp_count: int
+    label_count: int
+    identifier_mapping: dict[str, str]

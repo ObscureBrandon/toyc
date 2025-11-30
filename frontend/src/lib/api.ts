@@ -106,6 +106,35 @@ export interface ICGRequest {
   source_code: string;
 }
 
+export interface OptimizationStats {
+  original_instruction_count: number;
+  optimized_instruction_count: number;
+  instructions_saved: number;
+  reduction_percentage: number;
+  int2float_inlined: number;
+  temps_eliminated: number;
+  copies_propagated: number;
+  algebraic_simplifications: number;
+  dead_code_eliminated: number;
+}
+
+export interface OptimizationResponse {
+  original_instructions: ICGInstruction[];
+  optimized_instructions: ICGInstruction[];
+  source_code: string;
+  success: boolean;
+  error?: string;
+  stats?: OptimizationStats;
+  temp_count: number;
+  label_count: number;
+  identifier_mapping: Record<string, string>;
+}
+
+export interface OptimizationRequest {
+  source_code: string;
+}
+
+
 export class ApiClient {
   private baseUrl: string;
 
@@ -176,6 +205,23 @@ export class ApiClient {
 
     return response.json() as Promise<ICGResponse>;
   }
+
+  async optimizeCode(sourceCode: string): Promise<OptimizationResponse> {
+    const response = await fetch(`${this.baseUrl}/api/optimize`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ source_code: sourceCode } as OptimizationRequest),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to optimize code: ${response.statusText}`);
+    }
+
+    return response.json() as Promise<OptimizationResponse>;
+  }
+
 
   async healthCheck(): Promise<{ status: string }> {
     const response = await fetch(`${this.baseUrl}/health`);

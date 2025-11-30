@@ -120,7 +120,7 @@ export function StepByStepVisualizer({
         </h1>
         <p className="text-gray-600 dark:text-gray-400">
           Watch how your code is processed through lexing, parsing, AST
-          construction, semantic analysis, and intermediate code generation
+          construction, semantic analysis, code generation, and optimization
         </p>
       </div>
 
@@ -172,7 +172,7 @@ export function StepByStepVisualizer({
                         : phase === "semantic-analysis"
                           ? "Semantic Analysis"
                           : phase === "icg"
-                            ? "Code Generation"
+                            ? "Code Gen & Opt"
                             : phase}
                     </div>
                     <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">

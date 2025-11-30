@@ -13,6 +13,9 @@ from models import (
     ICGRequest,
     ICGResponse,
     ICGInstruction,
+    OptimizationRequest,
+    OptimizationResponse,
+    OptimizationStats,
 )
 from toyc.lexer import Lexer
 from toyc.token import TokenType
@@ -21,6 +24,7 @@ from toyc.ast import ParseError
 from toyc.tracer import trace_compilation
 from toyc.semantic_analyzer import SemanticAnalyzer
 from toyc.icg import ICGGenerator
+from toyc.optimizer import Optimizer
 
 app = FastAPI(
     title="ToyC Compiler API",
@@ -225,3 +229,98 @@ async def generate_icg(request: ICGRequest) -> ICGResponse:
             label_count=0,
             identifier_mapping={},
         )
+
+
+@app.post("/api/optimize", response_model=OptimizationResponse)
+async def optimize_code(request: OptimizationRequest) -> OptimizationResponse:
+    """Optimize intermediate code by eliminating unnecessary temps and simplifying expressions."""
+    try:
+        # Parse the source code
+        ast = parse_code(request.source_code)
+
+        # Perform semantic analysis
+        analyzer = SemanticAnalyzer()
+        analyzed_ast = analyzer.analyze(ast)
+
+        # Generate intermediate code
+        icg_gen = ICGGenerator()
+        instructions = icg_gen.generate(analyzed_ast)
+
+        # Convert original instructions to response format
+        original_icg = [
+            ICGInstruction(
+                op=instr.op,
+                arg1=instr.arg1,
+                arg2=instr.arg2,
+                result=instr.result,
+                label=instr.label,
+                instruction=str(instr),
+            )
+            for instr in instructions
+        ]
+
+        # Optimize the code
+        optimizer = Optimizer()
+        optimized_instructions = optimizer.optimize(instructions)
+
+        # Convert optimized instructions to response format
+        optimized_icg = [
+            ICGInstruction(
+                op=instr.op,
+                arg1=instr.arg1,
+                arg2=instr.arg2,
+                result=instr.result,
+                label=instr.label,
+                instruction=str(instr),
+            )
+            for instr in optimized_instructions
+        ]
+
+        # Build optimization stats
+        stats = OptimizationStats(
+            original_instruction_count=optimizer.stats.original_instruction_count,
+            optimized_instruction_count=optimizer.stats.optimized_instruction_count,
+            instructions_saved=optimizer.stats.instructions_saved,
+            reduction_percentage=optimizer.stats.reduction_percentage,
+            int2float_inlined=optimizer.stats.int2float_inlined,
+            temps_eliminated=optimizer.stats.temps_eliminated,
+            copies_propagated=optimizer.stats.copies_propagated,
+            algebraic_simplifications=optimizer.stats.algebraic_simplifications,
+            dead_code_eliminated=optimizer.stats.dead_code_eliminated,
+        )
+
+        return OptimizationResponse(
+            original_instructions=original_icg,
+            optimized_instructions=optimized_icg,
+            source_code=request.source_code,
+            success=True,
+            stats=stats,
+            temp_count=icg_gen.temp_counter,
+            label_count=icg_gen.label_counter,
+            identifier_mapping=icg_gen.identifier_map,
+        )
+
+    except ParseError as e:
+        return OptimizationResponse(
+            original_instructions=[],
+            optimized_instructions=[],
+            source_code=request.source_code,
+            success=False,
+            error=f"Parse error: {e.message}",
+            temp_count=0,
+            label_count=0,
+            identifier_mapping={},
+        )
+
+    except Exception as e:
+        return OptimizationResponse(
+            original_instructions=[],
+            optimized_instructions=[],
+            source_code=request.source_code,
+            success=False,
+            error=f"Error: {str(e)}",
+            temp_count=0,
+            label_count=0,
+            identifier_mapping={},
+        )
+

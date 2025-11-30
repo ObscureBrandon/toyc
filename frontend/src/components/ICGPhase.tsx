@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { apiClient, type ICGResponse, type ICGInstruction } from '@/lib/api';
+import { apiClient, type ICGResponse, type ICGInstruction, type OptimizationResponse } from '@/lib/api';
 
 interface ICGPhaseProps {
   sourceCode: string;
@@ -10,19 +10,24 @@ interface ICGPhaseProps {
 
 export function ICGPhase({ sourceCode }: ICGPhaseProps) {
   const [icgData, setIcgData] = useState<ICGResponse | null>(null);
+  const [optimizationData, setOptimizationData] = useState<OptimizationResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const generateICG = async () => {
+    const generateICGAndOptimize = async () => {
       if (!sourceCode.trim()) return;
 
       setIsLoading(true);
       setError(null);
 
       try {
-        const response = await apiClient.generateICG(sourceCode);
-        setIcgData(response);
+        const icgResponse = await apiClient.generateICG(sourceCode);
+        setIcgData(icgResponse);
+
+        // Also get optimized version
+        const optimizationResponse = await apiClient.optimizeCode(sourceCode);
+        setOptimizationData(optimizationResponse);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to generate ICG');
       } finally {
@@ -30,12 +35,13 @@ export function ICGPhase({ sourceCode }: ICGPhaseProps) {
       }
     };
 
-    generateICG();
+    generateICGAndOptimize();
   }, [sourceCode]);
 
   const getTokenColor = (token: string): string => {
     if (token.startsWith('#')) return 'text-pink-400'; // Literals
     if (token.startsWith('temp')) return 'text-green-400'; // Temps
+    if (token.includes('(f)')) return 'text-cyan-400'; // Float annotation
     if (token.startsWith('id') && /^id\d+/.test(token)) return 'text-blue-400'; // Normalized identifiers
     if (token.startsWith('L') && /^L\d+/.test(token)) return 'text-orange-400'; // Labels
     if (['read', 'write', 'goto', 'if_false', 'label', 'int2float'].includes(token))
@@ -94,12 +100,80 @@ export function ICGPhase({ sourceCode }: ICGPhaseProps) {
       {/* Header */}
       <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border">
         <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-          Intermediate Code Generation (ICG)
+          Code Generation & Optimization
         </h2>
         <p className="text-sm text-gray-600 dark:text-gray-400">
-          Three-address code representation of your program
+          Three-address code with optimization to reduce unnecessary temporaries
         </p>
       </div>
+
+      {/* Optimization Statistics */}
+      {optimizationData?.stats && (
+        <div className="bg-gradient-to-r from-blue-900/20 to-purple-900/20 rounded-lg p-6 border border-blue-700/30">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+            Optimization Results
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-white/10 dark:bg-gray-800/50 rounded-lg p-3">
+              <div className="text-xs text-gray-600 dark:text-gray-400">Instructions Saved</div>
+              <div className="text-2xl font-bold text-green-400">
+                {optimizationData.stats.instructions_saved}
+              </div>
+            </div>
+            <div className="bg-white/10 dark:bg-gray-800/50 rounded-lg p-3">
+              <div className="text-xs text-gray-600 dark:text-gray-400">Reduction</div>
+              <div className="text-2xl font-bold text-blue-400">
+                {optimizationData.stats.reduction_percentage.toFixed(1)}%
+              </div>
+            </div>
+            <div className="bg-white/10 dark:bg-gray-800/50 rounded-lg p-3">
+              <div className="text-xs text-gray-600 dark:text-gray-400">Original Count</div>
+              <div className="text-2xl font-bold text-gray-400">
+                {optimizationData.stats.original_instruction_count}
+              </div>
+            </div>
+            <div className="bg-white/10 dark:bg-gray-800/50 rounded-lg p-3">
+              <div className="text-xs text-gray-600 dark:text-gray-400">Optimized Count</div>
+              <div className="text-2xl font-bold text-purple-400">
+                {optimizationData.stats.optimized_instruction_count}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+            <div className="bg-white/5 dark:bg-gray-800/30 rounded p-2">
+              <div className="text-gray-500 dark:text-gray-400">int2float inlined</div>
+              <div className="text-lg font-semibold text-cyan-400">
+                {optimizationData.stats.int2float_inlined}
+              </div>
+            </div>
+            <div className="bg-white/5 dark:bg-gray-800/30 rounded p-2">
+              <div className="text-gray-500 dark:text-gray-400">Temps eliminated</div>
+              <div className="text-lg font-semibold text-green-400">
+                {optimizationData.stats.temps_eliminated}
+              </div>
+            </div>
+            <div className="bg-white/5 dark:bg-gray-800/30 rounded p-2">
+              <div className="text-gray-500 dark:text-gray-400">Copies propagated</div>
+              <div className="text-lg font-semibold text-yellow-400">
+                {optimizationData.stats.copies_propagated}
+              </div>
+            </div>
+            <div className="bg-white/5 dark:bg-gray-800/30 rounded p-2">
+              <div className="text-gray-500 dark:text-gray-400">Algebraic simplifications</div>
+              <div className="text-lg font-semibold text-orange-400">
+                {optimizationData.stats.algebraic_simplifications}
+              </div>
+            </div>
+            <div className="bg-white/5 dark:bg-gray-800/30 rounded p-2">
+              <div className="text-gray-500 dark:text-gray-400">Dead code removed</div>
+              <div className="text-lg font-semibold text-red-400">
+                {optimizationData.stats.dead_code_eliminated}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Identifier Mapping */}
       {Object.keys(icgData.identifier_mapping).length > 0 && (
@@ -122,30 +196,54 @@ export function ICGPhase({ sourceCode }: ICGPhaseProps) {
         </div>
       )}
 
-      {/* Statistics */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border">
-          <div className="text-sm text-gray-600 dark:text-gray-400">Instructions</div>
-          <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-            {icgData.instructions.length}
+      {/* Side-by-side Code Comparison */}
+      {optimizationData && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Original ICG */}
+          <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border">
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">
+              Before Optimization ({icgData.instructions.length} instructions)
+            </h3>
+            <div className="bg-gray-900 p-3 rounded-lg font-mono text-sm overflow-x-auto max-h-96 overflow-y-auto">
+              {icgData.instructions.map((inst: ICGInstruction, idx: number) => (
+                <div key={idx} className="text-gray-100">
+                  <span className="text-gray-500 mr-3">{idx + 1}.</span>
+                  {highlightTokens(inst.instruction)}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border">
-          <div className="text-sm text-gray-600 dark:text-gray-400">Temp Variables</div>
-          <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-            {icgData.temp_count}
-          </div>
-        </div>
-        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border">
-          <div className="text-sm text-gray-600 dark:text-gray-400">Labels</div>
-          <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
-            {icgData.label_count}
-          </div>
-        </div>
-      </div>
 
-      {/* Instructions Table */}
+          {/* Optimized ICG */}
+          <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-green-500/30">
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">
+              After Optimization ({optimizationData.optimized_instructions.length} instructions)
+            </h3>
+            <div className="bg-gray-900 p-3 rounded-lg font-mono text-sm overflow-x-auto max-h-96 overflow-y-auto">
+              {optimizationData.optimized_instructions.map((inst: ICGInstruction, idx: number) => (
+                <motion.div
+                  key={idx}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: idx * 0.05 }}
+                  className="text-gray-100"
+                >
+                  <span className="text-gray-500 mr-3">{idx + 1}.</span>
+                  {highlightTokens(inst.instruction)}
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Instructions Table - Original */}
       <div className="bg-white dark:bg-gray-800 rounded-lg border overflow-hidden">
+        <div className="p-4 bg-gray-50 dark:bg-gray-700">
+          <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+            Original Three-Address Code (Detailed View)
+          </h3>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 dark:bg-gray-700">
@@ -210,25 +308,10 @@ export function ICGPhase({ sourceCode }: ICGPhaseProps) {
         </div>
       </div>
 
-      {/* Code Listing */}
-      <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border">
-        <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">
-          Three-Address Code
-        </h3>
-        <div className="bg-gray-900 p-4 rounded-lg font-mono text-sm overflow-x-auto">
-          {icgData.instructions.map((inst: ICGInstruction, idx: number) => (
-            <div key={idx} className="text-gray-100">
-              <span className="text-gray-500 mr-4">{idx + 1}.</span>
-              {highlightTokens(inst.instruction)}
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* Legend */}
       <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border">
         <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">Legend</h3>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="flex items-center gap-2">
             <span className="text-pink-400 font-mono">#5</span>
             <span className="text-sm text-gray-600 dark:text-gray-400">Literals</span>
@@ -240,6 +323,10 @@ export function ICGPhase({ sourceCode }: ICGPhaseProps) {
           <div className="flex items-center gap-2">
             <span className="text-blue-400 font-mono">id1</span>
             <span className="text-sm text-gray-600 dark:text-gray-400">Identifiers</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-cyan-400 font-mono">id1(f)</span>
+            <span className="text-sm text-gray-600 dark:text-gray-400">Float annotation</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-orange-400 font-mono">L1</span>
