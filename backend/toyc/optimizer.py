@@ -160,12 +160,14 @@ class Optimizer:
                     not next_instr.arg2):
                     
                     # Inline: change temp's result to final destination
+                    # Result is now an identifier, not a temp
                     new_instr = ThreeAddressCode(
                         op=instr.op,
                         arg1=instr.arg1,
                         arg2=instr.arg2,
                         result=next_instr.result,
-                        label=None
+                        label=None,
+                        is_temp=next_instr.result.startswith("temp") if next_instr.result else False
                     )
                     result.append(new_instr)
                     self.stats.temps_eliminated += 1
@@ -278,7 +280,8 @@ class Optimizer:
             arg1=new_arg1,
             arg2=new_arg2,
             result=instr.result,
-            label=instr.label
+            label=instr.label,
+            is_temp=instr.is_temp
         )
     
     def _simplify_instruction(self, instr: ThreeAddressCode) -> ThreeAddressCode:
@@ -286,20 +289,20 @@ class Optimizer:
         # x + 0 or 0 + x -> x
         if instr.op == "+" and (instr.arg2 == "#0" or instr.arg1 == "#0"):
             other = instr.arg1 if instr.arg2 == "#0" else instr.arg2
-            return ThreeAddressCode(op="assign", arg1=other, result=instr.result)
+            return ThreeAddressCode(op="assign", arg1=other, result=instr.result, is_temp=instr.is_temp)
         
         # x - 0 -> x
         if instr.op == "-" and instr.arg2 == "#0":
-            return ThreeAddressCode(op="assign", arg1=instr.arg1, result=instr.result)
+            return ThreeAddressCode(op="assign", arg1=instr.arg1, result=instr.result, is_temp=instr.is_temp)
         
         # x * 1 or 1 * x -> x
         if instr.op == "*" and (instr.arg2 == "#1" or instr.arg1 == "#1"):
             other = instr.arg1 if instr.arg2 == "#1" else instr.arg2
-            return ThreeAddressCode(op="assign", arg1=other, result=instr.result)
+            return ThreeAddressCode(op="assign", arg1=other, result=instr.result, is_temp=instr.is_temp)
         
         # x * 0 or 0 * x -> 0
         if instr.op == "*" and (instr.arg2 == "#0" or instr.arg1 == "#0"):
-            return ThreeAddressCode(op="assign", arg1="#0", result=instr.result)
+            return ThreeAddressCode(op="assign", arg1="#0", result=instr.result, is_temp=instr.is_temp)
         
         return instr
     
@@ -362,7 +365,8 @@ class Optimizer:
                 arg1=new_arg1,
                 arg2=new_arg2,
                 result=new_result,
-                label=instr.label
+                label=instr.label,
+                is_temp=instr.is_temp
             )
             result.append(new_instr)
         

@@ -5,7 +5,7 @@ Each instruction performs only one operation.
 Literal numbers are prefixed with #.
 """
 
-from typing import List, Optional
+from typing import List, Optional, Mapping
 from dataclasses import dataclass
 from .ast import (
     ASTNode,
@@ -33,6 +33,7 @@ class ThreeAddressCode:
     arg2: Optional[str] = None  # Second operand (can be #literal, temp, or variable)
     result: Optional[str] = None  # Destination (temp or variable)
     label: Optional[str] = None  # For label instructions
+    is_temp: bool = False  # True if result is a temporary (should stay in register)
 
     def __str__(self) -> str:
         """String representation of the instruction."""
@@ -61,28 +62,45 @@ class ThreeAddressCode:
 class ICGGenerator:
     """Generates intermediate code (three-address code) from analyzed AST."""
 
-    def __init__(self):
+    def __init__(self, symbol_table: Mapping[str, str] | None = None):
         self.temp_counter = 0
         self.label_counter = 0
         self.code: List[ThreeAddressCode] = []
         self.identifier_map: dict[str, str] = {}  # Maps variable names to id1, id2, etc.
         self.identifier_counter = 0
-
-    def new_temp(self) -> str:
-        """Generate a new temporary variable name (temp1, temp2, ...)."""
-        self.temp_counter += 1
-        return f"temp{self.temp_counter}"
+        # Type tracking: maps normalized identifiers (id1, temp1, etc.) to "int" or "float"
+        self.type_map: dict[str, str] = {}
+        # Symbol table from semantic analyzer (maps original var names to types)
+        self.symbol_table: Mapping[str, str] = symbol_table or {}
 
     def new_label(self) -> str:
         """Generate a new label name (L1, L2, ...)."""
         self.label_counter += 1
         return f"L{self.label_counter}"
 
+    def new_temp(self, temp_type: str = "int") -> str:
+        """Generate a new temporary variable name (temp1, temp2, ...) and track its type."""
+        self.temp_counter += 1
+        temp_name = f"temp{self.temp_counter}"
+        self.type_map[temp_name] = temp_type
+        return temp_name
+
+    def get_operand_type(self, operand: str) -> str:
+        """Get the type of an operand (literal, identifier, or temp)."""
+        if operand.startswith("#"):
+            # Literal: check if it contains a decimal point
+            return "float" if "." in operand else "int"
+        return self.type_map.get(operand, "unknown")
+
     def get_identifier(self, name: str) -> str:
         """Get or create normalized identifier (id1, id2, ...) for a variable name."""
         if name not in self.identifier_map:
             self.identifier_counter += 1
-            self.identifier_map[name] = f"id{self.identifier_counter}"
+            normalized = f"id{self.identifier_counter}"
+            self.identifier_map[name] = normalized
+            # Track type from symbol table
+            var_type = self.symbol_table.get(name, "unknown")
+            self.type_map[normalized] = var_type
         return self.identifier_map[name]
 
     def emit(
@@ -92,9 +110,10 @@ class ICGGenerator:
         arg2: Optional[str] = None,
         result: Optional[str] = None,
         label: Optional[str] = None,
+        is_temp: bool = False,
     ):
         """Add a three-address code instruction."""
-        instr = ThreeAddressCode(op=op, arg1=arg1, arg2=arg2, result=result, label=label)
+        instr = ThreeAddressCode(op=op, arg1=arg1, arg2=arg2, result=result, label=label, is_temp=is_temp)
         self.code.append(instr)
 
     def collect_identifiers(self, node: ASTNode):
@@ -138,6 +157,7 @@ class ICGGenerator:
         self.label_counter = 0
         self.identifier_map = {}
         self.identifier_counter = 0
+        self.type_map = {}
 
         # First pass: collect all identifiers in order of appearance
         for statement in ast.statements:
@@ -181,7 +201,7 @@ class ICGGenerator:
             return self.generate_int2float(node)
         else:
             # Fallback for unknown expression types
-            temp = self.new_temp()
+            temp = self.new_temp("unknown")
             self.emit("unknown", None, None, temp)
             return temp
 
@@ -189,7 +209,13 @@ class ICGGenerator:
         """Generate ICG for a binary operation."""
         left_result = self.generate_expression(node.left)
         right_result = self.generate_expression(node.right)
-        result_temp = self.new_temp()
+        
+        # Determine result type: float if either operand is float
+        left_type = self.get_operand_type(left_result)
+        right_type = self.get_operand_type(right_result)
+        result_type = "float" if left_type == "float" or right_type == "float" else "int"
+        
+        result_temp = self.new_temp(result_type)
 
         # Map operator tokens to ICG operations
         op_map = {
@@ -209,14 +235,14 @@ class ICGGenerator:
         }
 
         op = op_map.get(node.operator, node.operator)
-        self.emit(op, left_result, right_result, result_temp)
+        self.emit(op, left_result, right_result, result_temp, is_temp=True)
         return result_temp
 
     def generate_int2float(self, node: Int2FloatNode) -> str:
         """Generate ICG for int to float conversion."""
         child_result = self.generate_expression(node.child)
-        result_temp = self.new_temp()
-        self.emit("int2float", child_result, None, result_temp)
+        result_temp = self.new_temp("float")  # Result of int2float is always float
+        self.emit("int2float", child_result, None, result_temp, is_temp=True)
         return result_temp
 
     def generate_assignment(self, node: AssignmentNode):
@@ -224,6 +250,10 @@ class ICGGenerator:
         value_result = self.generate_expression(node.value)
         # Use normalized identifier for the variable
         normalized_id = self.get_identifier(node.identifier)
+        # Update type based on the assigned value
+        value_type = self.get_operand_type(value_result)
+        if value_type != "unknown":
+            self.type_map[normalized_id] = value_type
         self.emit("assign", value_result, None, normalized_id)
 
     def generate_block(self, node: BlockNode):

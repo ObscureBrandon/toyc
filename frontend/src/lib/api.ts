@@ -77,6 +77,7 @@ export interface TraceResponse {
   error_line?: number;
   error_column?: number;
   error_position?: number;
+  identifier_mapping?: Record<string, string>;  // Maps variable names to id1, id2, etc.
 }
 
 export interface TraceRequest {
@@ -131,6 +132,26 @@ export interface OptimizationResponse {
 }
 
 export interface OptimizationRequest {
+  source_code: string;
+}
+
+export interface AssemblyInstruction {
+  op: string;
+  operands: string[];
+  instruction: string;
+}
+
+export interface CodeGenResponse {
+  assembly_instructions: AssemblyInstruction[];
+  optimized_instructions: ICGInstruction[];
+  source_code: string;
+  success: boolean;
+  error?: string;
+  identifier_mapping: Record<string, string>;
+  type_map: Record<string, string>;
+}
+
+export interface CodeGenRequest {
   source_code: string;
 }
 
@@ -220,6 +241,22 @@ export class ApiClient {
     }
 
     return response.json() as Promise<OptimizationResponse>;
+  }
+
+  async generateCode(sourceCode: string): Promise<CodeGenResponse> {
+    const response = await fetch(`${this.baseUrl}/api/codegen`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ source_code: sourceCode } as CodeGenRequest),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to generate code: ${response.statusText}`);
+    }
+
+    return response.json() as Promise<CodeGenResponse>;
   }
 
 

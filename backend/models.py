@@ -64,6 +64,7 @@ class TraceResponse(BaseModel):
     error_line: Optional[int] = None
     error_column: Optional[int] = None
     error_position: Optional[int] = None
+    identifier_mapping: Optional[Dict[str, str]] = None  # Maps variable names to id1, id2, etc.
 
 
 class ICGInstruction(BaseModel):
@@ -127,3 +128,29 @@ class OptimizationResponse(BaseModel):
     temp_count: int
     label_count: int
     identifier_mapping: dict[str, str]
+
+
+class AssemblyInstructionResponse(BaseModel):
+    """Represents a single assembly-like instruction."""
+
+    op: str
+    operands: List[str]
+    instruction: str  # Full string representation
+
+
+class CodeGenRequest(BaseModel):
+    """Request to generate assembly code."""
+
+    source_code: str
+
+
+class CodeGenResponse(BaseModel):
+    """Response containing generated assembly code."""
+
+    assembly_instructions: List[AssemblyInstructionResponse]
+    optimized_instructions: List[ICGInstruction]  # The TAC input
+    source_code: str
+    success: bool
+    error: Optional[str] = None
+    identifier_mapping: dict[str, str]
+    type_map: dict[str, str]  # Maps identifiers/temps to types

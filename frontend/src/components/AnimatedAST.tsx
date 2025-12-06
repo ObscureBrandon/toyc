@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect, useCallback } from 'react';
 import {
   ReactFlow,
   Node,
@@ -23,6 +23,7 @@ import '@xyflow/react/dist/style.css';
 interface AnimatedASTProps {
   visibleSteps: TraceStep[];
   currentStep: TraceStep | null;
+  identifierMapping?: Record<string, string>;
 }
 
 interface FlowNode extends Node {
@@ -180,7 +181,16 @@ const FitViewOnChange = ({ nodeCount }: { nodeCount: number }) => {
   return null;
 };
 
-export function AnimatedAST({ visibleSteps, currentStep }: AnimatedASTProps) {
+export function AnimatedAST({ visibleSteps, currentStep, identifierMapping }: AnimatedASTProps) {
+  // Helper function to get display name with normalized identifier
+  const getDisplayName = useCallback((originalName: string): string => {
+    const normalizedName = identifierMapping?.[originalName];
+    if (normalizedName) {
+      return `${normalizedName} (${originalName})`;
+    }
+    return originalName;
+  }, [identifierMapping]);
+
   // Filter to AST node creation steps
   const astSteps = visibleSteps.filter(step => 
     step.phase === 'parsing' && 
@@ -263,7 +273,7 @@ export function AnimatedAST({ visibleSteps, currentStep }: AnimatedASTProps) {
           label = 'Program';
           break;
         case 'Assignment':
-          label = `${astNode.identifier || 'unknown'} =`;
+          label = `${getDisplayName(astNode.identifier || 'unknown')} =`;
           break;
         case 'BinaryOp':
           label = astNode.operator || '?';
@@ -277,7 +287,7 @@ export function AnimatedAST({ visibleSteps, currentStep }: AnimatedASTProps) {
           value = astNode.value;
           break;
         case 'Identifier':
-          label = astNode.name || 'unknown';
+          label = getDisplayName(astNode.name || 'unknown');
           value = astNode.name;
           break;
         case 'Int2Float':
@@ -293,7 +303,7 @@ export function AnimatedAST({ visibleSteps, currentStep }: AnimatedASTProps) {
           label = 'repeat-until';
           break;
         case 'Read':
-          label = `read ${astNode.identifier || '?'}`;
+          label = `read ${getDisplayName(astNode.identifier || '?')}`;
           break;
         case 'Write':
           label = 'write';
@@ -493,7 +503,7 @@ export function AnimatedAST({ visibleSteps, currentStep }: AnimatedASTProps) {
       incrementalNodes: layoutNodes(nodes), 
       incrementalEdges: edges 
     };
-  }, [astSteps, currentStep?.step_id]);
+  }, [astSteps, currentStep?.step_id, getDisplayName]);
 
   // Compute visible nodes and edges based on current step
   const { visibleNodes, visibleEdges } = useMemo(() => {

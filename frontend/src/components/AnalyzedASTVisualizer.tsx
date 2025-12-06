@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect, useCallback } from 'react';
 import {
   ReactFlow,
   Node,
@@ -20,6 +20,7 @@ import '@xyflow/react/dist/style.css';
 
 interface AnalyzedASTVisualizerProps {
   analyzedAst?: ASTNode;
+  identifierMapping?: Record<string, string>;
 }
 
 interface FlowNode extends Node {
@@ -128,7 +129,16 @@ const FitViewOnChange = ({ nodeCount }: { nodeCount: number }) => {
   return null;
 };
 
-export function AnalyzedASTVisualizer({ analyzedAst }: AnalyzedASTVisualizerProps) {
+export function AnalyzedASTVisualizer({ analyzedAst, identifierMapping }: AnalyzedASTVisualizerProps) {
+  // Helper function to get display name with normalized identifier
+  const getDisplayName = useCallback((originalName: string): string => {
+    const normalizedName = identifierMapping?.[originalName];
+    if (normalizedName) {
+      return `${normalizedName} (${originalName})`;
+    }
+    return originalName;
+  }, [identifierMapping]);
+
   const { nodes, edges } = useMemo(() => {
     if (!analyzedAst) {
       return { nodes: [], edges: [] };
@@ -148,8 +158,9 @@ export function AnalyzedASTVisualizer({ analyzedAst }: AnalyzedASTVisualizerProp
           childLabel = `${child.value}`;
           outputLabel = `${child.value}.0`;
         } else if (child.type === 'Identifier' && 'name' in child) {
-          childLabel = child.name as string;
-          outputLabel = `${child.name} (Float)`;
+          const displayName = getDisplayName(child.name as string);
+          childLabel = displayName;
+          outputLabel = `${displayName} (Float)`;
         } else if (child.type === 'BinaryOp') {
           childLabel = 'expr';
           outputLabel = 'result';
@@ -231,7 +242,7 @@ export function AnalyzedASTVisualizer({ analyzedAst }: AnalyzedASTVisualizerProp
           label = 'Program';
           break;
         case 'Assignment':
-          label = `${astNode.identifier || 'unknown'} :=`;
+          label = `${getDisplayName(astNode.identifier || 'unknown')} :=`;
           break;
         case 'BinaryOp':
           label = astNode.operator || '?';
@@ -246,7 +257,7 @@ export function AnalyzedASTVisualizer({ analyzedAst }: AnalyzedASTVisualizerProp
           value = astNode.value;
           break;
         case 'Identifier':
-          label = astNode.name || 'unknown';
+          label = getDisplayName(astNode.name || 'unknown');
           value = astNode.name;
           break;
         case 'Block':
@@ -259,7 +270,7 @@ export function AnalyzedASTVisualizer({ analyzedAst }: AnalyzedASTVisualizerProp
           label = 'repeat-until';
           break;
         case 'Read':
-          label = `read ${astNode.identifier || '?'}`;
+          label = `read ${getDisplayName(astNode.identifier || '?')}`;
           break;
         case 'Write':
           label = 'write';
@@ -423,7 +434,7 @@ export function AnalyzedASTVisualizer({ analyzedAst }: AnalyzedASTVisualizerProp
       nodes: layoutNodes(flowNodes, flowEdges), 
       edges: flowEdges 
     };
-  }, [analyzedAst]);
+  }, [analyzedAst, getDisplayName]);
 
   return (
     <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border">

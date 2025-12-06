@@ -3,4 +3,4 @@
 A simple compiler implementation for educational purposes.
 """
 
-__all__ = ["Token", "TokenType", "Lexer"]
+__all__ = ["Token", "TokenType", "Lexer", "CodeGenerator", "AssemblyInstruction"]

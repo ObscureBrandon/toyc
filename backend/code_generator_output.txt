@@ -1,0 +1,20 @@
+// Input Program
+x := y + 3.5;
+
+// Output from Code Generation Step
+LOAD R1, y
+ADDF R1, R1, #3.5
+STRF x, R1
+
+
+// Input Program
+y := 4;
+z := 1.2;
+x := y * (z - 2);
+
+// Output from Code Generation Step
+LOADF R1, z;
+SUBF R1, R1, #2.0;
+LOADF R2, y;
+MULF R2, R2, R1;
+STRF x, R2;

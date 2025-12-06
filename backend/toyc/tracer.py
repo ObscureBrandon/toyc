@@ -28,6 +28,8 @@ class TracingLexer(Lexer):
     def __init__(self, input: str):
         self.steps = []
         self.step_id = 0
+        self.identifier_map: dict[str, str] = {}  # Maps original names to normalized (e.g., "x" -> "id1")
+        self.identifier_counter = 1
         super().__init__(input)
 
     def trace_step(self, description: str, state: dict, position: int | None = None):
@@ -554,6 +556,12 @@ class TracingLexer(Lexer):
             start_pos = self.position - len(literal)
             end_pos = self.position - 1
             token = Token(token_type, literal, start_line, start_column, start_pos, end_pos)
+            
+            # Track identifier mapping for normalization
+            if token_type == TokenType.IDENTIFIER and literal not in self.identifier_map:
+                self.identifier_map[literal] = f"id{self.identifier_counter}"
+                self.identifier_counter += 1
+            
             self.trace_step(
                 f"Created {token_type.name} token: '{literal}'",
                 {
@@ -1772,6 +1780,7 @@ def trace_compilation(source_code: str) -> dict:
             "success": False,
             "error": str(e),
             "error_phase": "lexing",
+            "identifier_mapping": lexer.identifier_map,
         }
 
     # Phase 2: Parsing
@@ -1870,6 +1879,7 @@ def trace_compilation(source_code: str) -> dict:
             "error_line": e.line,
             "error_column": e.column,
             "error_position": e.position,
+            "identifier_mapping": lexer.identifier_map,
         }
     except Exception as e:
         # Other parsing error
@@ -1896,6 +1906,7 @@ def trace_compilation(source_code: str) -> dict:
             "success": False,
             "error": str(e),
             "error_phase": "parsing",
+            "identifier_mapping": lexer.identifier_map,
         }
 
     # Phase 3: Semantic Analysis
@@ -1915,6 +1926,7 @@ def trace_compilation(source_code: str) -> dict:
             "ast": ast.to_dict(),
             "analyzed_ast": analyzed_ast.to_dict(),
             "success": True,
+            "identifier_mapping": lexer.identifier_map,
         }
     except Exception as e:
         # Semantic analysis error
@@ -1941,4 +1953,5 @@ def trace_compilation(source_code: str) -> dict:
             "success": False,
             "error": str(e),
             "error_phase": "semantic_analysis",
+            "identifier_mapping": lexer.identifier_map,
         }

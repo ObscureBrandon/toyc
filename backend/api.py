@@ -16,6 +16,9 @@ from models import (
     OptimizationRequest,
     OptimizationResponse,
     OptimizationStats,
+    CodeGenRequest,
+    CodeGenResponse,
+    AssemblyInstructionResponse,
 )
 from toyc.lexer import Lexer
 from toyc.token import TokenType
@@ -25,6 +28,7 @@ from toyc.tracer import trace_compilation
 from toyc.semantic_analyzer import SemanticAnalyzer
 from toyc.icg import ICGGenerator
 from toyc.optimizer import Optimizer
+from toyc.code_generator import CodeGenerator
 
 app = FastAPI(
     title="ToyC Compiler API",
@@ -160,6 +164,7 @@ async def trace_code(request: TraceRequest) -> TraceResponse:
             analyzed_ast=result.get("analyzed_ast"),
             error=result.get("error"),
             error_phase=result.get("error_phase"),
+            identifier_mapping=result.get("identifier_mapping"),
         )
 
     except Exception as e:
@@ -322,5 +327,90 @@ async def optimize_code(request: OptimizationRequest) -> OptimizationResponse:
             temp_count=0,
             label_count=0,
             identifier_mapping={},
+        )
+
+
+@app.post("/api/codegen", response_model=CodeGenResponse)
+async def generate_code(request: CodeGenRequest) -> CodeGenResponse:
+    """Generate assembly-like code from source code.
+    
+    Pipeline: Parse -> Semantic Analysis -> ICG -> Optimize -> Code Generation
+    """
+    try:
+        # Parse the source code
+        ast = parse_code(request.source_code)
+
+        # Perform semantic analysis
+        analyzer = SemanticAnalyzer()
+        analyzed_ast = analyzer.analyze(ast)
+
+        # Generate intermediate code (with symbol table for type info)
+        icg_gen = ICGGenerator(symbol_table=analyzer.symbol_table)
+        instructions = icg_gen.generate(analyzed_ast)
+
+        # Optimize the code
+        optimizer = Optimizer()
+        optimized_instructions = optimizer.optimize(instructions)
+
+        # Update type_map after optimization (optimizer may change temp names)
+        # We need to re-track types for renamed temps
+        type_map = icg_gen.type_map.copy()
+
+        # Generate assembly code
+        code_gen = CodeGenerator(type_map=type_map)
+        assembly_instructions = code_gen.generate(optimized_instructions)
+
+        # Convert optimized instructions to response format
+        optimized_icg = [
+            ICGInstruction(
+                op=instr.op,
+                arg1=instr.arg1,
+                arg2=instr.arg2,
+                result=instr.result,
+                label=instr.label,
+                instruction=str(instr),
+            )
+            for instr in optimized_instructions
+        ]
+
+        # Convert assembly instructions to response format
+        assembly_response = [
+            AssemblyInstructionResponse(
+                op=instr.op,
+                operands=instr.operands,
+                instruction=str(instr),
+            )
+            for instr in assembly_instructions
+        ]
+
+        return CodeGenResponse(
+            assembly_instructions=assembly_response,
+            optimized_instructions=optimized_icg,
+            source_code=request.source_code,
+            success=True,
+            identifier_mapping=icg_gen.identifier_map,
+            type_map=type_map,
+        )
+
+    except ParseError as e:
+        return CodeGenResponse(
+            assembly_instructions=[],
+            optimized_instructions=[],
+            source_code=request.source_code,
+            success=False,
+            error=f"Parse error: {e.message}",
+            identifier_mapping={},
+            type_map={},
+        )
+
+    except Exception as e:
+        return CodeGenResponse(
+            assembly_instructions=[],
+            optimized_instructions=[],
+            source_code=request.source_code,
+            success=False,
+            error=f"Error: {str(e)}",
+            identifier_mapping={},
+            type_map={},
         )
 

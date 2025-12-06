@@ -291,6 +291,7 @@ export function StepByStepVisualizer({
               <ParsingWithAST
                 visibleSteps={visibleSteps}
                 currentStep={currentStepData}
+                identifierMapping={traceData?.identifier_mapping}
               />
             )}
 
@@ -299,6 +300,7 @@ export function StepByStepVisualizer({
                 visibleSteps={visibleSteps}
                 currentStep={currentStepData}
                 analyzedAst={traceData?.analyzed_ast}
+                identifierMapping={traceData?.identifier_mapping}
               />
             )}
 

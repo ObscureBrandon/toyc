@@ -9,11 +9,13 @@ import { ASTNodeLog } from "./ASTNodeLog";
 interface ParsingWithASTProps {
   visibleSteps: TraceStep[];
   currentStep: TraceStep | null;
+  identifierMapping?: Record<string, string>;
 }
 
 export function ParsingWithAST({
   visibleSteps,
   currentStep,
+  identifierMapping,
 }: ParsingWithASTProps) {
   return (
     <div className="space-y-6">
@@ -22,7 +24,7 @@ export function ParsingWithAST({
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
           AST Construction
         </h3>
-        <AnimatedAST visibleSteps={visibleSteps} currentStep={currentStep} />
+        <AnimatedAST visibleSteps={visibleSteps} currentStep={currentStep} identifierMapping={identifierMapping} />
       </div>
 
       {/* Bottom: Parser trace and AST log side by side */}
