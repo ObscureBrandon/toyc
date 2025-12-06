@@ -1,4 +1,4 @@
-from typing import Dict, Literal
+from typing import Dict, Literal, Optional
 from .ast import (
     ASTNode,
     ProgramNode,
@@ -22,8 +22,12 @@ NodeType = Literal["int", "float", "unknown"]
 class SemanticAnalyzer:
     """Performs semantic analysis with type checking and coercion"""
 
-    def __init__(self):
+    def __init__(self, predefined_types: Optional[Dict[str, NodeType]] = None):
         self.symbol_table: Dict[str, NodeType] = {}
+        # Pre-populate symbol table with user-provided types for undefined variables
+        if predefined_types:
+            for var, var_type in predefined_types.items():
+                self.symbol_table[var] = var_type
 
     def analyze(self, ast: ProgramNode) -> ProgramNode:
         """Analyze the AST and insert type coercion nodes where needed"""

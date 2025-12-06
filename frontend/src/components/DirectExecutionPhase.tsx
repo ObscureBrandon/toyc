@@ -57,7 +57,7 @@ export function DirectExecutionPhase({
                   <span className="font-mono text-blue-600 dark:text-blue-400 font-semibold">
                     {normalizedName} ({name.toUpperCase()})
                   </span>
-                  <span className="text-gray-500 dark:text-gray-400">=</span>
+                  <span className="text-gray-500 dark:text-gray-400">is</span>
                   <span className="font-mono text-purple-600 dark:text-purple-400 font-semibold">
                     {typeof value === 'number' && !Number.isInteger(value) 
                       ? value.toFixed(2) 

@@ -1,6 +1,6 @@
 """Direct execution interpreter for the hybrid compiler mode."""
 
-from typing import Dict, List, Union, Any
+from typing import Dict, List, Union, Any, Optional
 from .ast import (
     ASTNode,
     ProgramNode,
@@ -21,11 +21,15 @@ from .ast import (
 class Interpreter:
     """Executes an analyzed AST and returns results at each node."""
 
-    def __init__(self):
+    def __init__(self, predefined_values: Optional[Dict[str, Union[int, float]]] = None):
         self.variables: Dict[str, Union[int, float]] = {}
         self.output: List[Union[int, float, str]] = []
         self.execution_steps: List[dict] = []
         self.step_id = 0
+        # Pre-populate variables with user-provided values for undefined variables
+        if predefined_values:
+            for var, value in predefined_values.items():
+                self.variables[var] = value
 
     def execute(self, analyzed_ast: ProgramNode) -> dict:
         """Execute the AST and return execution results."""

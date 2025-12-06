@@ -19,6 +19,8 @@ from models import (
     CodeGenRequest,
     CodeGenResponse,
     AssemblyInstructionResponse,
+    CheckVariablesRequest,
+    CheckVariablesResponse,
 )
 from toyc.lexer import Lexer
 from toyc.token import TokenType
@@ -29,6 +31,7 @@ from toyc.semantic_analyzer import SemanticAnalyzer
 from toyc.icg import ICGGenerator
 from toyc.optimizer import Optimizer
 from toyc.code_generator import CodeGenerator
+from toyc.variable_analyzer import find_undefined_variables
 
 app = FastAPI(
     title="ToyC Compiler API",
@@ -140,7 +143,12 @@ async def parse_source_code(request: ParserRequest) -> ParserResponse:
 async def trace_code(request: TraceRequest) -> TraceResponse:
     """Trace step-by-step compilation process."""
     try:
-        result = trace_compilation(request.source_code, mode=request.mode)
+        result = trace_compilation(
+            request.source_code,
+            mode=request.mode,
+            variable_types=request.variable_types,
+            variable_values=request.variable_values,
+        )
 
         # Convert steps to TraceStep objects
         trace_steps = []
@@ -175,6 +183,41 @@ async def trace_code(request: TraceRequest) -> TraceResponse:
         return TraceResponse(
             steps=[],
             source_code=request.source_code,
+            success=False,
+            error=f"Unexpected error: {str(e)}",
+        )
+
+
+@app.post("/api/check-variables", response_model=CheckVariablesResponse)
+async def check_variables(request: CheckVariablesRequest) -> CheckVariablesResponse:
+    """Check for undefined variables in source code.
+    
+    Returns a list of variables that are used before being defined.
+    This is used to prompt the user for types (standard mode) or values (hybrid mode).
+    """
+    try:
+        # Parse the source code
+        ast = parse_code(request.source_code)
+        
+        # Find undefined variables
+        undefined_vars = find_undefined_variables(ast)
+        
+        return CheckVariablesResponse(
+            undefined_variables=undefined_vars,
+            success=True,
+        )
+    
+    except ParseError as e:
+        # If there's a parse error, return empty list - the parse error will be shown during trace
+        return CheckVariablesResponse(
+            undefined_variables=[],
+            success=False,
+            error=f"Parse error: {e.message}",
+        )
+    
+    except Exception as e:
+        return CheckVariablesResponse(
+            undefined_variables=[],
             success=False,
             error=f"Unexpected error: {str(e)}",
         )

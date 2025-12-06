@@ -43,6 +43,10 @@ class ParserResponse(BaseModel):
 class TraceRequest(BaseModel):
     source_code: str
     mode: Literal["standard", "hybrid"] = "standard"
+    # Pre-defined variable types (for standard mode) - maps variable name to "int" or "float"
+    variable_types: Optional[Dict[str, Literal["int", "float"]]] = None
+    # Pre-defined variable values (for hybrid mode) - maps variable name to numeric value
+    variable_values: Optional[Dict[str, float]] = None
 
 
 class TraceStep(BaseModel):
@@ -159,3 +163,15 @@ class CodeGenResponse(BaseModel):
     error: Optional[str] = None
     identifier_mapping: dict[str, str]
     type_map: dict[str, str]  # Maps identifiers/temps to types
+
+
+class CheckVariablesRequest(BaseModel):
+    """Request to check for undefined variables."""
+    source_code: str
+
+
+class CheckVariablesResponse(BaseModel):
+    """Response containing list of undefined variables."""
+    undefined_variables: List[str]  # Variable names used before definition, in order of first use
+    success: bool
+    error: Optional[str] = None

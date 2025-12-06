@@ -96,6 +96,18 @@ export interface ExecutedASTNode extends ASTNode {
 export interface TraceRequest {
   source_code: string;
   mode?: 'standard' | 'hybrid';
+  variable_types?: Record<string, 'int' | 'float'>;  // For standard mode
+  variable_values?: Record<string, number>;          // For hybrid mode
+}
+
+export interface CheckVariablesRequest {
+  source_code: string;
+}
+
+export interface CheckVariablesResponse {
+  undefined_variables: string[];
+  success: boolean;
+  error?: string;
 }
 
 export interface ICGInstruction {
@@ -209,13 +221,25 @@ export class ApiClient {
     return response.json() as Promise<ParserResponse>;
   }
 
-  async traceCode(sourceCode: string, mode: 'standard' | 'hybrid' = 'standard'): Promise<TraceResponse> {
+  async traceCode(
+    sourceCode: string,
+    mode: 'standard' | 'hybrid' = 'standard',
+    variableTypes?: Record<string, 'int' | 'float'>,
+    variableValues?: Record<string, number>,
+  ): Promise<TraceResponse> {
+    const request: TraceRequest = {
+      source_code: sourceCode,
+      mode,
+      variable_types: variableTypes,
+      variable_values: variableValues,
+    };
+    
     const response = await fetch(`${this.baseUrl}/api/trace`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ source_code: sourceCode, mode } as TraceRequest),
+      body: JSON.stringify(request),
     });
 
     if (!response.ok) {
@@ -223,6 +247,22 @@ export class ApiClient {
     }
 
     return response.json() as Promise<TraceResponse>;
+  }
+
+  async checkVariables(sourceCode: string): Promise<CheckVariablesResponse> {
+    const response = await fetch(`${this.baseUrl}/api/check-variables`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ source_code: sourceCode } as CheckVariablesRequest),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to check variables: ${response.statusText}`);
+    }
+
+    return response.json() as Promise<CheckVariablesResponse>;
   }
 
   async generateICG(sourceCode: string): Promise<ICGResponse> {

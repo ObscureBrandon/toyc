@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Play, Pause, SkipForward, SkipBack, RotateCcw } from "lucide-react";
 import { apiClient, TraceResponse } from "@/lib/api";
 import { useStepByStep } from "@/hooks/useStepByStep";
+import { UndefinedVariablesForm, VariableDefinitions } from "./UndefinedVariablesForm";
 import { LexingPhase } from "./LexingPhase";
 import { ParsingWithAST } from "./ParsingWithAST";
 import { SemanticAnalysisPhase } from "./SemanticAnalysisPhase";
@@ -26,6 +27,10 @@ export function StepByStepVisualizer({
   const [activePhase, setActivePhase] = useState<
     "lexing" | "parsing" | "semantic-analysis" | "icg" | "execution"
   >("lexing");
+  
+  // Undefined variables state
+  const [undefinedVariables, setUndefinedVariables] = useState<string[]>([]);
+  const [showVariablePrompt, setShowVariablePrompt] = useState(false);
 
   // Use a ref to maintain stable steps reference
   const stepsRef = useRef<TraceResponse["steps"]>([]);
@@ -51,14 +56,36 @@ export function StepByStepVisualizer({
     reset,
   } = useStepByStep(steps);
 
-  const handleTrace = async () => {
+  const handleTrace = useCallback(async (definitions?: VariableDefinitions) => {
     if (!sourceCode.trim()) return;
 
     setIsLoading(true);
     setError(null);
 
     try {
-      const response = await apiClient.traceCode(sourceCode, compilerMode);
+      // If no definitions provided, check for undefined variables first
+      if (!definitions) {
+        const checkResult = await apiClient.checkVariables(sourceCode);
+        
+        if (checkResult.success && checkResult.undefined_variables.length > 0) {
+          // Found undefined variables - show the prompt
+          setUndefinedVariables(checkResult.undefined_variables);
+          setShowVariablePrompt(true);
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // No undefined variables or definitions provided - proceed with trace
+      setShowVariablePrompt(false);
+      setUndefinedVariables([]);
+
+      const response = await apiClient.traceCode(
+        sourceCode,
+        compilerMode,
+        definitions?.types,
+        definitions?.values,
+      );
       setTraceData(response);
 
       if (!response.success && response.error) {
@@ -72,16 +99,26 @@ export function StepByStepVisualizer({
     } finally {
       setIsLoading(false);
     }
+  }, [sourceCode, compilerMode]);
+
+  // Handle variable definitions from the form
+  const handleVariableDefinitions = (definitions: VariableDefinitions) => {
+    setShowVariablePrompt(false);
+    handleTrace(definitions);
   };
 
   // Debounced auto-trace when source code or mode changes
   useEffect(() => {
+    // Reset variable definitions when source or mode changes
+    setShowVariablePrompt(false);
+    setUndefinedVariables([]);
+    
     const timer = setTimeout(() => {
       handleTrace();
     }, 500); // Wait 500ms after user stops typing
 
     return () => clearTimeout(timer); // Cancel previous timer if user types again
-  }, [sourceCode, compilerMode]);
+  }, [handleTrace]);
 
   // Determine active phase based on current step
   useEffect(() => {
@@ -186,9 +223,32 @@ export function StepByStepVisualizer({
           className="w-full h-20 p-3 border border-gray-300 dark:border-gray-600 rounded-md font-mono text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
           placeholder="Enter your code here..."
         />
+        
+        {/* Undefined Variables Form */}
+        {showVariablePrompt && undefinedVariables.length > 0 && (
+          <UndefinedVariablesForm
+            variables={undefinedVariables}
+            mode={compilerMode}
+            onSubmit={handleVariableDefinitions}
+          />
+        )}
+        
+        {/* Loading indicator */}
+        {isLoading && (
+          <div className="mt-4 text-sm text-gray-500 dark:text-gray-400">
+            Loading...
+          </div>
+        )}
+        
+        {/* Error display */}
+        {error && !isLoading && (
+          <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg text-sm text-red-700 dark:text-red-300">
+            {error}
+          </div>
+        )}
       </div>
 
-      {traceData && (
+      {traceData && !showVariablePrompt && (
         <>
           {/* Phase Progress Indicator */}
           <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border">

@@ -1,4 +1,5 @@
 import traceback
+from typing import Optional
 
 from .lexer import Lexer
 from .token import Token, TokenType, lookup_identifier
@@ -1415,8 +1416,8 @@ class TracingParser:
 class TracingSemanticAnalyzer(SemanticAnalyzer):
     """Extended semantic analyzer that records step-by-step execution"""
 
-    def __init__(self, step_id_start: int = 0):
-        super().__init__()
+    def __init__(self, step_id_start: int = 0, predefined_types: Optional[dict] = None):
+        super().__init__(predefined_types=predefined_types)
         self.steps = []
         self.step_id = step_id_start
         self.node_id_counter = 0
@@ -1746,13 +1747,20 @@ class TracingSemanticAnalyzer(SemanticAnalyzer):
         return WriteNode(analyzed_expression)
 
 
-def trace_compilation(source_code: str, mode: str = "standard") -> dict:
+def trace_compilation(
+    source_code: str,
+    mode: str = "standard",
+    variable_types: Optional[dict] = None,
+    variable_values: Optional[dict] = None,
+) -> dict:
     """
     Trace the complete compilation process step by step
     
     Args:
         source_code: The source code to compile
         mode: Either "standard" or "hybrid". Hybrid mode uses V1/V2 identifiers and executes the AST.
+        variable_types: Pre-defined types for undefined variables (standard mode). Maps variable name to "int" or "float".
+        variable_values: Pre-defined values for undefined variables (hybrid mode). Maps variable name to numeric value.
     """
     hybrid_mode = mode == "hybrid"
     
@@ -1921,7 +1929,8 @@ def trace_compilation(source_code: str, mode: str = "standard") -> dict:
 
     # Phase 3: Semantic Analysis
     semantic_analyzer = TracingSemanticAnalyzer(
-        step_id_start=len(lexer.steps) + len(parser.steps)
+        step_id_start=len(lexer.steps) + len(parser.steps),
+        predefined_types=variable_types,
     )
     
     try:
@@ -1942,7 +1951,7 @@ def trace_compilation(source_code: str, mode: str = "standard") -> dict:
         # In hybrid mode, execute the analyzed AST
         if hybrid_mode:
             from .interpreter import Interpreter
-            interpreter = Interpreter()
+            interpreter = Interpreter(predefined_values=variable_values)
             execution_result = interpreter.execute(analyzed_ast)
             
             # Add execution steps
