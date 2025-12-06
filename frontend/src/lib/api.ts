@@ -77,11 +77,25 @@ export interface TraceResponse {
   error_line?: number;
   error_column?: number;
   error_position?: number;
-  identifier_mapping?: Record<string, string>;  // Maps variable names to id1, id2, etc.
+  identifier_mapping?: Record<string, string>;  // Maps variable names to id1, id2, etc. (or V1, V2 in hybrid)
+  // Hybrid mode execution results
+  executed_ast?: ExecutedASTNode;  // AST with execution results on each node
+  variables?: Record<string, number>;  // Final variable state after execution
+  output?: (number | string)[];  // Write statement outputs
+}
+
+// Extended AST node with execution results (for hybrid mode)
+export interface ExecutedASTNode extends ASTNode {
+  result?: number | string | boolean;
+  result_type?: 'int' | 'float' | 'bool';
+  error?: string;  // Runtime error if any
+  branch_taken?: 'then' | 'else' | 'none';  // For if statements
+  iterations?: number;  // For repeat-until loops
 }
 
 export interface TraceRequest {
   source_code: string;
+  mode?: 'standard' | 'hybrid';
 }
 
 export interface ICGInstruction {
@@ -195,13 +209,13 @@ export class ApiClient {
     return response.json() as Promise<ParserResponse>;
   }
 
-  async traceCode(sourceCode: string): Promise<TraceResponse> {
+  async traceCode(sourceCode: string, mode: 'standard' | 'hybrid' = 'standard'): Promise<TraceResponse> {
     const response = await fetch(`${this.baseUrl}/api/trace`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ source_code: sourceCode } as TraceRequest),
+      body: JSON.stringify({ source_code: sourceCode, mode } as TraceRequest),
     });
 
     if (!response.ok) {

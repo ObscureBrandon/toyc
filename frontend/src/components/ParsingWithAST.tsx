@@ -10,12 +10,14 @@ interface ParsingWithASTProps {
   visibleSteps: TraceStep[];
   currentStep: TraceStep | null;
   identifierMapping?: Record<string, string>;
+  compilerMode?: "standard" | "hybrid";
 }
 
 export function ParsingWithAST({
   visibleSteps,
   currentStep,
   identifierMapping,
+  compilerMode = "standard",
 }: ParsingWithASTProps) {
   return (
     <div className="space-y-6">
@@ -24,7 +26,7 @@ export function ParsingWithAST({
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
           AST Construction
         </h3>
-        <AnimatedAST visibleSteps={visibleSteps} currentStep={currentStep} identifierMapping={identifierMapping} />
+        <AnimatedAST visibleSteps={visibleSteps} currentStep={currentStep} identifierMapping={identifierMapping} compilerMode={compilerMode} />
       </div>
 
       {/* Bottom: Parser trace and AST log side by side */}

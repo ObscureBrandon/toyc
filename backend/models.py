@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Literal
 
 
 class LexerRequest(BaseModel):
@@ -42,6 +42,7 @@ class ParserResponse(BaseModel):
 
 class TraceRequest(BaseModel):
     source_code: str
+    mode: Literal["standard", "hybrid"] = "standard"
 
 
 class TraceStep(BaseModel):
@@ -65,6 +66,10 @@ class TraceResponse(BaseModel):
     error_column: Optional[int] = None
     error_position: Optional[int] = None
     identifier_mapping: Optional[Dict[str, str]] = None  # Maps variable names to id1, id2, etc.
+    # Hybrid mode execution results
+    executed_ast: Optional[Dict[str, Any]] = None  # AST with execution results on each node
+    variables: Optional[Dict[str, Any]] = None  # Final variable state after execution
+    output: Optional[List[Any]] = None  # Write statement outputs
 
 
 class ICGInstruction(BaseModel):

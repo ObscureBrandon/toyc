@@ -25,10 +25,11 @@ from .semantic_analyzer import SemanticAnalyzer
 class TracingLexer(Lexer):
     """Extended lexer that records step-by-step execution"""
 
-    def __init__(self, input: str):
+    def __init__(self, input: str, hybrid_mode: bool = False):
         self.steps = []
         self.step_id = 0
-        self.identifier_map: dict[str, str] = {}  # Maps original names to normalized (e.g., "x" -> "id1")
+        self.hybrid_mode = hybrid_mode
+        self.identifier_map: dict[str, str] = {}  # Maps original names to normalized (e.g., "x" -> "id1" or "V1")
         self.identifier_counter = 1
         super().__init__(input)
 
@@ -559,7 +560,10 @@ class TracingLexer(Lexer):
             
             # Track identifier mapping for normalization
             if token_type == TokenType.IDENTIFIER and literal not in self.identifier_map:
-                self.identifier_map[literal] = f"id{self.identifier_counter}"
+                if self.hybrid_mode:
+                    self.identifier_map[literal] = f"V{self.identifier_counter}"
+                else:
+                    self.identifier_map[literal] = f"id{self.identifier_counter}"
                 self.identifier_counter += 1
             
             self.trace_step(
@@ -1742,12 +1746,18 @@ class TracingSemanticAnalyzer(SemanticAnalyzer):
         return WriteNode(analyzed_expression)
 
 
-def trace_compilation(source_code: str) -> dict:
+def trace_compilation(source_code: str, mode: str = "standard") -> dict:
     """
     Trace the complete compilation process step by step
+    
+    Args:
+        source_code: The source code to compile
+        mode: Either "standard" or "hybrid". Hybrid mode uses V1/V2 identifiers and executes the AST.
     """
+    hybrid_mode = mode == "hybrid"
+    
     # Phase 1: Lexing (always attempt)
-    lexer = TracingLexer(source_code)
+    lexer = TracingLexer(source_code, hybrid_mode=hybrid_mode)
     tokens = []
     
     try:
@@ -1784,7 +1794,7 @@ def trace_compilation(source_code: str) -> dict:
         }
 
     # Phase 2: Parsing
-    parse_lexer = TracingLexer(source_code)
+    parse_lexer = TracingLexer(source_code, hybrid_mode=hybrid_mode)
     parser = TracingParser(parse_lexer)
     ast = None
     partial_ast = None
@@ -1920,7 +1930,7 @@ def trace_compilation(source_code: str) -> dict:
         # Combine all steps
         all_steps = lexer.steps + parser.steps + semantic_analyzer.steps
 
-        return {
+        result = {
             "steps": all_steps,
             "tokens": [{"type": t.type.name, "literal": t.literal} for t in tokens],
             "ast": ast.to_dict(),
@@ -1928,6 +1938,21 @@ def trace_compilation(source_code: str) -> dict:
             "success": True,
             "identifier_mapping": lexer.identifier_map,
         }
+        
+        # In hybrid mode, execute the analyzed AST
+        if hybrid_mode:
+            from .interpreter import Interpreter
+            interpreter = Interpreter()
+            execution_result = interpreter.execute(analyzed_ast)
+            
+            # Add execution steps
+            all_steps.extend(execution_result["execution_steps"])
+            result["steps"] = all_steps
+            result["executed_ast"] = execution_result["executed_ast"]
+            result["variables"] = execution_result["variables"]
+            result["output"] = execution_result["output"]
+        
+        return result
     except Exception as e:
         # Semantic analysis error
         print(traceback.format_exc())

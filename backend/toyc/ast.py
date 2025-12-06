@@ -81,8 +81,8 @@ class AssignmentNode(ASTNode):
     def to_dict(self) -> Dict[str, Any]:
         return {
             "type": "Assignment",
-            "identifier": self.identifier,
-            "value": self.value.to_dict(),
+            "left": {"type": "Identifier", "name": self.identifier},
+            "right": self.value.to_dict(),
         }
 
 

@@ -7,6 +7,7 @@ interface LexingPhaseProps {
   sourceCode: string;
   visibleSteps: TraceStep[];
   currentStep: TraceStep | null;
+  compilerMode?: "standard" | "hybrid";
 }
 
 interface TokenPreview {
@@ -21,6 +22,7 @@ export function LexingPhase({
   sourceCode,
   visibleSteps,
   currentStep,
+  compilerMode = "standard",
 }: LexingPhaseProps) {
   // Filter to lexing phase steps
   const lexingSteps = visibleSteps.filter((step) => step.phase === "lexing");
@@ -74,10 +76,15 @@ export function LexingPhase({
     for (const token of completedTokens) {
       if (token.type === "IDENTIFIER") {
         if (!identifierMap[token.literal]) {
-          identifierMap[token.literal] = `id${identifierCounter}`;
+          // Use V1, V2 for hybrid mode, id1, id2 for standard
+          const prefix = compilerMode === "hybrid" ? "V" : "id";
+          identifierMap[token.literal] = `${prefix}${identifierCounter}`;
           identifierCounter += 1;
         }
         normalizedParts.push(identifierMap[token.literal]);
+      } else if (token.type === "ASSIGN" && compilerMode === "hybrid") {
+        // Use 'is' for assignment in hybrid mode
+        normalizedParts.push("is");
       } else {
         normalizedParts.push(token.literal);
       }
@@ -374,7 +381,7 @@ export function LexingPhase({
               className="bg-blue-50 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-600/50 rounded-lg px-3 py-2 flex items-center gap-2"
             >
               <span className="font-mono text-sm text-gray-900 dark:text-gray-100 font-medium">
-                {original}
+                {compilerMode === "hybrid" ? original.toUpperCase() : original}
               </span>
               <span className="text-gray-500 dark:text-gray-400">→</span>
               <span className="font-mono text-sm text-blue-600 dark:text-blue-400 font-semibold">
@@ -394,7 +401,7 @@ export function LexingPhase({
         <h3 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">
           Normalized Representation
           <span className="ml-2 text-xs text-gray-500 dark:text-gray-400 font-normal">
-            (identifiers normalized)
+            (identifiers normalized{compilerMode === "hybrid" ? ", assignment shown as 'is'" : ""})
           </span>
         </h3>
         <div className="bg-gray-50 dark:bg-gray-900 p-3 rounded border">
@@ -403,7 +410,9 @@ export function LexingPhase({
           </div>
         </div>
         <div className="mt-2 text-xs text-gray-600 dark:text-gray-400">
-          Identifiers are replaced with id1, id2, id3... in order of first appearance
+          {compilerMode === "hybrid" 
+            ? "Identifiers are replaced with V1, V2, V3... in order of first appearance"
+            : "Identifiers are replaced with id1, id2, id3... in order of first appearance"}
         </div>
       </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Play, Pause, SkipForward, SkipBack, RotateCcw } from "lucide-react";
 import { apiClient, TraceResponse } from "@/lib/api";
@@ -9,6 +9,7 @@ import { LexingPhase } from "./LexingPhase";
 import { ParsingWithAST } from "./ParsingWithAST";
 import { SemanticAnalysisPhase } from "./SemanticAnalysisPhase";
 import { ICGPhase } from "./ICGPhase";
+import { DirectExecutionPhase } from "./DirectExecutionPhase";
 
 interface StepByStepVisualizerProps {
   initialCode?: string;
@@ -21,9 +22,21 @@ export function StepByStepVisualizer({
   const [traceData, setTraceData] = useState<TraceResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [compilerMode, setCompilerMode] = useState<"standard" | "hybrid">("standard");
   const [activePhase, setActivePhase] = useState<
-    "lexing" | "parsing" | "semantic-analysis" | "icg"
+    "lexing" | "parsing" | "semantic-analysis" | "icg" | "execution"
   >("lexing");
+
+  // Use a ref to maintain stable steps reference
+  const stepsRef = useRef<TraceResponse["steps"]>([]);
+  
+  // Only update stepsRef when steps array content actually changes
+  const currentSteps = traceData?.steps || [];
+  if (currentSteps.length !== stepsRef.current.length || 
+      (currentSteps.length > 0 && currentSteps[0]?.step_id !== stepsRef.current[0]?.step_id)) {
+    stepsRef.current = currentSteps;
+  }
+  const steps = stepsRef.current;
 
   const {
     controls,
@@ -36,7 +49,7 @@ export function StepByStepVisualizer({
     goToStep,
     setSpeed,
     reset,
-  } = useStepByStep(traceData?.steps || []);
+  } = useStepByStep(steps);
 
   const handleTrace = async () => {
     if (!sourceCode.trim()) return;
@@ -45,7 +58,7 @@ export function StepByStepVisualizer({
     setError(null);
 
     try {
-      const response = await apiClient.traceCode(sourceCode);
+      const response = await apiClient.traceCode(sourceCode, compilerMode);
       setTraceData(response);
 
       if (!response.success && response.error) {
@@ -61,14 +74,14 @@ export function StepByStepVisualizer({
     }
   };
 
-  // Debounced auto-trace when source code changes
+  // Debounced auto-trace when source code or mode changes
   useEffect(() => {
     const timer = setTimeout(() => {
       handleTrace();
     }, 500); // Wait 500ms after user stops typing
 
     return () => clearTimeout(timer); // Cancel previous timer if user types again
-  }, [sourceCode]);
+  }, [sourceCode, compilerMode]);
 
   // Determine active phase based on current step
   useEffect(() => {
@@ -96,7 +109,8 @@ export function StepByStepVisualizer({
     "semantic-analysis": visibleSteps.filter(
       (s) => s.phase === "semantic-analysis",
     ).length,
-    icg: traceData && traceData.success ? 1 : 0, // ICG is shown once semantic analysis is complete
+    icg: traceData && traceData.success && compilerMode === "standard" ? 1 : 0,
+    execution: traceData && traceData.success && compilerMode === "hybrid" ? 1 : 0,
   };
 
   const totalPhaseSteps = {
@@ -108,7 +122,8 @@ export function StepByStepVisualizer({
     "semantic-analysis":
       traceData?.steps.filter((s) => s.phase === "semantic-analysis").length ||
       0,
-    icg: traceData && traceData.success ? 1 : 0, // ICG is a single-step phase
+    icg: traceData && traceData.success && compilerMode === "standard" ? 1 : 0,
+    execution: traceData && traceData.success && compilerMode === "hybrid" ? 1 : 0,
   };
 
   return (
@@ -126,6 +141,38 @@ export function StepByStepVisualizer({
 
       {/* Source Code Input */}
       <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border">
+        {/* Mode Toggle Tabs */}
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Mode:</span>
+          <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
+            <button
+              onClick={() => setCompilerMode("standard")}
+              className={`px-4 py-1.5 text-sm font-medium transition-colors ${
+                compilerMode === "standard"
+                  ? "bg-blue-600 text-white"
+                  : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600"
+              }`}
+            >
+              Standard
+            </button>
+            <button
+              onClick={() => setCompilerMode("hybrid")}
+              className={`px-4 py-1.5 text-sm font-medium transition-colors ${
+                compilerMode === "hybrid"
+                  ? "bg-purple-600 text-white"
+                  : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600"
+              }`}
+            >
+              Hybrid
+            </button>
+          </div>
+          <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
+            {compilerMode === "standard" 
+              ? "(Lexer → Parser → Semantic → ICG → Optimizer → Code Gen)"
+              : "(Lexer → Parser → Semantic → Direct Execution)"}
+          </span>
+        </div>
+        
         <label
           htmlFor="source-code"
           className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
@@ -155,7 +202,10 @@ export function StepByStepVisualizer({
             </div>
 
             <div className="grid grid-cols-4 gap-4">
-              {(["lexing", "parsing", "semantic-analysis", "icg"] as const).map(
+              {(compilerMode === "standard" 
+                ? ["lexing", "parsing", "semantic-analysis", "icg"] as const
+                : ["lexing", "parsing", "semantic-analysis", "execution"] as const
+              ).map(
                 (phase) => (
                   <div
                     key={phase}
@@ -173,14 +223,18 @@ export function StepByStepVisualizer({
                           ? "Semantic Analysis"
                           : phase === "icg"
                             ? "Code Gen & Opt"
-                            : phase}
+                            : phase === "execution"
+                              ? "Direct Execution"
+                              : phase}
                     </div>
                     <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                       {phaseProgress[phase]} / {totalPhaseSteps[phase]} steps
                     </div>
                     <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mt-2">
                       <div
-                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                        className={`h-2 rounded-full transition-all duration-300 ${
+                          phase === "execution" ? "bg-purple-600" : "bg-blue-600"
+                        }`}
                         style={{
                           width:
                             totalPhaseSteps[phase] > 0
@@ -284,6 +338,7 @@ export function StepByStepVisualizer({
                 sourceCode={sourceCode}
                 visibleSteps={visibleSteps}
                 currentStep={currentStepData}
+                compilerMode={compilerMode}
               />
             )}
 
@@ -292,6 +347,7 @@ export function StepByStepVisualizer({
                 visibleSteps={visibleSteps}
                 currentStep={currentStepData}
                 identifierMapping={traceData?.identifier_mapping}
+                compilerMode={compilerMode}
               />
             )}
 
@@ -301,11 +357,22 @@ export function StepByStepVisualizer({
                 currentStep={currentStepData}
                 analyzedAst={traceData?.analyzed_ast}
                 identifierMapping={traceData?.identifier_mapping}
+                compilerMode={compilerMode}
               />
             )}
 
-            {activePhase === "icg" && (
+            {activePhase === "icg" && compilerMode === "standard" && (
               <ICGPhase sourceCode={sourceCode} />
+            )}
+
+            {activePhase === "execution" && compilerMode === "hybrid" && (
+              <DirectExecutionPhase
+                executedAst={traceData?.executed_ast}
+                variables={traceData?.variables}
+                output={traceData?.output}
+                identifierMapping={traceData?.identifier_mapping}
+                sourceCode={sourceCode}
+              />
             )}
           </motion.div>
 

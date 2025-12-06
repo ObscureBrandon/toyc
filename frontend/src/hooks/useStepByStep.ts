@@ -79,7 +79,10 @@ export function useStepByStep(steps: TraceStep[]): StepByStepState {
 
   // Handle automatic playback
   useEffect(() => {
-    if (isPlaying && canGoNext) {
+    // Recalculate canGoNext inside effect to avoid stale closure
+    const canProgress = currentStep < totalSteps - 1;
+    
+    if (isPlaying && canProgress) {
       intervalRef.current = window.setInterval(() => {
         setCurrentStep(prev => {
           const next = prev + 1;
@@ -92,23 +95,28 @@ export function useStepByStep(steps: TraceStep[]): StepByStepState {
       }, 1000 / speed);
     } else {
       clearInterval();
-      if (!canGoNext) {
+      if (!canProgress && isPlaying) {
         setIsPlaying(false);
       }
     }
 
     return clearInterval;
-  }, [isPlaying, canGoNext, speed, totalSteps, clearInterval]);
+  }, [isPlaying, currentStep, speed, totalSteps, clearInterval]);
 
   // Cleanup on unmount
   useEffect(() => {
     return clearInterval;
   }, [clearInterval]);
 
-  // Reset when steps change
+  // Reset when steps change (new trace data loaded)
   useEffect(() => {
-    reset();
-  }, [steps, reset]);
+    setIsPlaying(false);
+    setCurrentStep(0);
+    if (intervalRef.current) {
+      window.clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, [steps]);
 
   const controls: PlaybackControls = {
     isPlaying,

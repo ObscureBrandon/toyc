@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useEffect, useCallback } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import {
   ReactFlow,
   Node,
@@ -14,22 +14,23 @@ import {
   useReactFlow,
 } from '@xyflow/react';
 import { motion } from 'framer-motion';
-import { ASTNode } from '@/lib/api';
+import { ExecutedASTNode } from '@/lib/api';
 
 import '@xyflow/react/dist/style.css';
 
-interface AnalyzedASTVisualizerProps {
-  analyzedAst?: ASTNode;
+interface ExecutionTreeVisualizerProps {
+  executedAst?: ExecutedASTNode;
   identifierMapping?: Record<string, string>;
-  compilerMode?: "standard" | "hybrid";
 }
 
 interface FlowNode extends Node {
   data: {
     label: string;
     nodeType: string;
+    result?: number | string | boolean;
+    resultType?: string;
+    error?: string;
     value?: string | number;
-    isCoercion: boolean;
   };
 }
 
@@ -65,33 +66,74 @@ const getNodeColor = (nodeType: string): string => {
   }
 };
 
-const AnalyzedASTNode = ({ data }: { data: FlowNode['data'] }) => {
+const getResultBadgeColor = (resultType?: string): string => {
+  switch (resultType) {
+    case 'int':
+      return 'bg-purple-600 text-white';
+    case 'float':
+      return 'bg-pink-600 text-white';
+    case 'bool':
+      return 'bg-green-600 text-white';
+    default:
+      return 'bg-gray-600 text-white';
+  }
+};
+
+const formatResult = (result: number | string | boolean | undefined): string => {
+  if (result === undefined || result === null) return '';
+  if (typeof result === 'boolean') return result ? 'true' : 'false';
+  if (typeof result === 'number') {
+    if (!Number.isFinite(result)) return 'Infinity';
+    if (!Number.isInteger(result)) return result.toFixed(2);
+  }
+  return String(result);
+};
+
+const ExecutionNode = ({ data }: { data: FlowNode['data'] }) => {
+  const hasResult = data.result !== undefined && data.result !== null && data.nodeType !== 'Program' && data.nodeType !== 'Block';
+  
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.3 }}
-      className="px-3 rounded-lg border-2 text-white font-bold text-sm text-center min-w-[80px] relative flex items-center justify-center"
-      style={{
-        backgroundColor: getNodeColor(data.nodeType),
-        borderColor: data.isCoercion ? '#fbbf24' : '#374151',
-        borderWidth: data.isCoercion ? '3px' : '2px',
-        boxShadow: data.isCoercion ? '0 0 10px rgba(251, 191, 36, 0.5)' : 'none',
-        height: '50px',
-      }}
-    >
-      <Handle
-        type="target"
-        position={Position.Top}
-        style={{ opacity: 0, pointerEvents: 'none' }}
-      />
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        style={{ opacity: 0, pointerEvents: 'none' }}
-      />
-      {data.label}
-    </motion.div>
+    <div className="flex flex-col items-center">
+      {/* Result badge above node */}
+      {hasResult && (
+        <motion.div
+          initial={{ opacity: 0, y: 10, scale: 0.8 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.3, delay: 0.1 }}
+          className={`px-2 py-1 rounded text-xs font-mono mb-1 font-bold shadow-md ${getResultBadgeColor(data.resultType)} ${data.error ? 'ring-2 ring-red-400' : ''}`}
+        >
+          {formatResult(data.result)}
+          {data.error && <span className="ml-1 text-red-200">!</span>}
+        </motion.div>
+      )}
+      
+      {/* Node itself */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.3 }}
+        className="px-3 rounded-lg border-2 text-white font-bold text-sm text-center min-w-[80px] relative flex items-center justify-center"
+        style={{
+          backgroundColor: getNodeColor(data.nodeType),
+          borderColor: data.error ? '#ef4444' : '#374151',
+          borderWidth: data.error ? '3px' : '2px',
+          boxShadow: data.error ? '0 0 10px rgba(239, 68, 68, 0.5)' : 'none',
+          height: '50px',
+        }}
+      >
+        <Handle
+          type="target"
+          position={Position.Top}
+          style={{ opacity: 0, pointerEvents: 'none' }}
+        />
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          style={{ opacity: 0, pointerEvents: 'none' }}
+        />
+        {data.label}
+      </motion.div>
+    </div>
   );
 };
 
@@ -111,13 +153,13 @@ const SimpleMiniMapNode = ({ x, y, width, height, color }: { x: number; y: numbe
 };
 
 const nodeTypes = {
-  analyzed: AnalyzedASTNode,
+  execution: ExecutionNode,
 };
 
 const FitViewOnChange = ({ nodeCount }: { nodeCount: number }) => {
   const { fitView } = useReactFlow();
   
-  useEffect(() => {
+  React.useEffect(() => {
     if (nodeCount > 0) {
       const timeout = setTimeout(() => {
         fitView({ padding: 0.1, duration: 500 });
@@ -130,25 +172,18 @@ const FitViewOnChange = ({ nodeCount }: { nodeCount: number }) => {
   return null;
 };
 
-export function AnalyzedASTVisualizer({ analyzedAst, identifierMapping, compilerMode = "standard" }: AnalyzedASTVisualizerProps) {
-  // Helper function to get display name with normalized identifier
+export function ExecutionTreeVisualizer({ executedAst, identifierMapping }: ExecutionTreeVisualizerProps) {
+  // Helper function to get display name with normalized identifier (V1, V2 for hybrid)
   const getDisplayName = useCallback((originalName: string): string => {
     const normalizedName = identifierMapping?.[originalName];
     if (normalizedName) {
-      // Use uppercase for original name in hybrid mode
-      const displayOriginal = compilerMode === "hybrid" ? originalName.toUpperCase() : originalName;
-      return `${normalizedName} (${displayOriginal})`;
+      return `${normalizedName} (${originalName.toUpperCase()})`;
     }
-    return compilerMode === "hybrid" ? originalName.toUpperCase() : originalName;
-  }, [identifierMapping, compilerMode]);
-
-  // Get the assignment operator based on mode
-  const getAssignmentOperator = useCallback(() => {
-    return compilerMode === "hybrid" ? "is" : ":=";
-  }, [compilerMode]);
+    return originalName.toUpperCase();
+  }, [identifierMapping]);
 
   const { nodes, edges } = useMemo(() => {
-    if (!analyzedAst) {
+    if (!executedAst) {
       return { nodes: [], edges: [] };
     }
     
@@ -156,101 +191,64 @@ export function AnalyzedASTVisualizer({ analyzedAst, identifierMapping, compiler
     const flowEdges: Edge[] = [];
     let nodeId = 0;
 
-    const buildFlowNodes = (astNode: ASTNode, parentId: string | null = null): string => {
+    const buildFlowNodes = (astNode: ExecutedASTNode, parentId: string | null = null): string => {
+      // Handle Int2Float specially - show conversion with result
       if (astNode.type === 'Int2Float' && 'child' in astNode && astNode.child) {
-        const child = astNode.child as ASTNode;
+        const child = astNode.child as ExecutedASTNode;
         
         let childLabel = '?';
-        let outputLabel = '?.0';
         if (child.type === 'Number') {
           childLabel = `${child.value}`;
-          outputLabel = `${child.value}.0`;
         } else if (child.type === 'Identifier' && 'name' in child) {
-          const displayName = getDisplayName(child.name as string);
-          childLabel = displayName;
-          outputLabel = `${displayName} (Float)`;
+          childLabel = getDisplayName(child.name as string);
         } else if (child.type === 'BinaryOp') {
           childLabel = 'expr';
-          outputLabel = 'result';
         }
         
-        // Create output node (the float result)
-        const outputId = `node-${nodeId++}`;
+        // Create the Int2Float node with result
+        const int2floatId = `node-${nodeId++}`;
         flowNodes.push({
-          id: outputId,
-          type: 'analyzed',
-          position: { x: 0, y: 0 },
-          data: {
-            label: outputLabel,
-            nodeType: 'Float',
-            value: childLabel !== 'expr' ? childLabel : undefined,
-            isCoercion: false,
-          },
-          draggable: false,
-          width: 80,
-          height: 50,
-        });
-
-        if (parentId) {
-          flowEdges.push({
-            id: `edge-${parentId}-${outputId}`,
-            source: parentId,
-            target: outputId,
-            type: 'smoothstep',
-            animated: false,
-          });
-        }
-
-        // Create conversion node
-        const conversionId = `node-${nodeId++}`;
-        flowNodes.push({
-          id: conversionId,
-          type: 'analyzed',
+          id: int2floatId,
+          type: 'execution',
           position: { x: 0, y: 0 },
           data: {
             label: `int2float(${childLabel})`,
             nodeType: 'Int2Float',
-            value: undefined,
-            isCoercion: true,
+            result: astNode.result,
+            resultType: astNode.result_type,
           },
           draggable: false,
           width: childLabel === 'expr' ? 120 : 110,
           height: 50,
         });
 
-        flowEdges.push({
-          id: `edge-${outputId}-${conversionId}`,
-          source: outputId,
-          target: conversionId,
-          type: 'straight',
-          animated: true,
-        });
-
-        // Create/connect child node(s)
-        const childId = buildFlowNodes(child, conversionId);
-        
-        // Make the edge from conversion to child straight and animated
-        const conversionToChildEdge = flowEdges.find(e => e.source === conversionId && e.target === childId);
-        if (conversionToChildEdge) {
-          conversionToChildEdge.type = 'straight';
-          conversionToChildEdge.animated = true;
+        if (parentId) {
+          flowEdges.push({
+            id: `edge-${parentId}-${int2floatId}`,
+            source: parentId,
+            target: int2floatId,
+            type: 'smoothstep',
+            animated: true,
+          });
         }
+
+        // Build child node
+        buildFlowNodes(child, int2floatId);
         
-        return outputId;
+        return int2floatId;
       }
 
       const currentId = `node-${nodeId++}`;
       
       let label = astNode.type;
       let value: string | number | undefined;
-      const isCoercion = false;
       
       switch (astNode.type) {
         case 'Program':
           label = 'Program';
           break;
         case 'Assignment':
-          label = getAssignmentOperator();
+          label = 'is';
           break;
         case 'BinaryOp':
           label = astNode.operator || '?';
@@ -259,11 +257,12 @@ export function AnalyzedASTVisualizer({ analyzedAst, identifierMapping, compiler
           label = `${astNode.value}`;
           value = astNode.value;
           break;
-        case 'Float':
+        case 'Float': {
           const floatValue = typeof astNode.value === 'number' ? astNode.value : parseFloat(astNode.value as string);
           label = Number.isInteger(floatValue) ? `${floatValue}.0` : `${floatValue}`;
           value = astNode.value;
           break;
+        }
         case 'Identifier':
           label = getDisplayName(astNode.name || 'unknown');
           value = astNode.name;
@@ -284,19 +283,21 @@ export function AnalyzedASTVisualizer({ analyzedAst, identifierMapping, compiler
           label = 'write';
           break;
         case 'Error':
-          label = `❌ ${astNode.message || 'Parse Error'}`;
+          label = `Error`;
           break;
       }
 
       flowNodes.push({
         id: currentId,
-        type: 'analyzed',
+        type: 'execution',
         position: { x: 0, y: 0 },
         data: {
           label,
           nodeType: astNode.type,
+          result: astNode.result,
+          resultType: astNode.result_type,
+          error: astNode.error,
           value,
-          isCoercion,
         },
         draggable: false,
         width: 80,
@@ -309,58 +310,62 @@ export function AnalyzedASTVisualizer({ analyzedAst, identifierMapping, compiler
           source: parentId,
           target: currentId,
           type: 'smoothstep',
-          animated: isCoercion,
+          animated: false,
         });
       }
 
+      // Recursively build children
       if (astNode.type === 'Assignment') {
         if ('left' in astNode && astNode.left && typeof astNode.left === 'object') {
-          buildFlowNodes(astNode.left as ASTNode, currentId);
+          buildFlowNodes(astNode.left as ExecutedASTNode, currentId);
         }
         if ('right' in astNode && astNode.right && typeof astNode.right === 'object') {
-          buildFlowNodes(astNode.right as ASTNode, currentId);
+          buildFlowNodes(astNode.right as ExecutedASTNode, currentId);
         }
       } else if (astNode.type === 'BinaryOp') {
         if ('left' in astNode && astNode.left && typeof astNode.left === 'object') {
-          buildFlowNodes(astNode.left as ASTNode, currentId);
+          buildFlowNodes(astNode.left as ExecutedASTNode, currentId);
         }
         if ('right' in astNode && astNode.right && typeof astNode.right === 'object') {
-          buildFlowNodes(astNode.right as ASTNode, currentId);
+          buildFlowNodes(astNode.right as ExecutedASTNode, currentId);
         }
       } else if (astNode.type === 'Program' && 'statements' in astNode && Array.isArray(astNode.statements)) {
-        (astNode.statements as ASTNode[]).forEach((stmt: ASTNode) => {
+        (astNode.statements as ExecutedASTNode[]).forEach((stmt) => {
           buildFlowNodes(stmt, currentId);
         });
       } else if (astNode.type === 'Block' && 'statements' in astNode && Array.isArray(astNode.statements)) {
-        (astNode.statements as ASTNode[]).forEach((stmt: ASTNode) => {
+        (astNode.statements as ExecutedASTNode[]).forEach((stmt) => {
           buildFlowNodes(stmt, currentId);
         });
       } else if (astNode.type === 'If') {
         if ('condition' in astNode && astNode.condition) {
-          buildFlowNodes(astNode.condition as ASTNode, currentId);
+          buildFlowNodes(astNode.condition as ExecutedASTNode, currentId);
         }
         if ('then_branch' in astNode && astNode.then_branch) {
-          buildFlowNodes(astNode.then_branch as ASTNode, currentId);
+          buildFlowNodes(astNode.then_branch as ExecutedASTNode, currentId);
         }
         if ('else_branch' in astNode && astNode.else_branch) {
-          buildFlowNodes(astNode.else_branch as ASTNode, currentId);
+          buildFlowNodes(astNode.else_branch as ExecutedASTNode, currentId);
         }
       } else if (astNode.type === 'RepeatUntil') {
         if ('body' in astNode && astNode.body) {
-          buildFlowNodes(astNode.body as ASTNode, currentId);
+          buildFlowNodes(astNode.body as ExecutedASTNode, currentId);
         }
         if ('condition' in astNode && astNode.condition) {
-          buildFlowNodes(astNode.condition as ASTNode, currentId);
+          buildFlowNodes(astNode.condition as ExecutedASTNode, currentId);
         }
       } else if (astNode.type === 'Write' && 'expression' in astNode && astNode.expression) {
-        buildFlowNodes(astNode.expression as ASTNode, currentId);
+        buildFlowNodes(astNode.expression as ExecutedASTNode, currentId);
+      } else if (astNode.type === 'Int2Float' && 'child' in astNode && astNode.child) {
+        buildFlowNodes(astNode.child as ExecutedASTNode, currentId);
       }
 
       return currentId;
     };
 
-    buildFlowNodes(analyzedAst);
+    buildFlowNodes(executedAst);
 
+    // Layout nodes (same algorithm as AnalyzedASTVisualizer)
     const layoutNodes = (nodes: FlowNode[], edges: Edge[]): FlowNode[] => {
       const rootNode = nodes.find(node => 
         !edges.some(edge => edge.target === node.id)
@@ -370,25 +375,20 @@ export function AnalyzedASTVisualizer({ analyzedAst, identifierMapping, compiler
 
       const layoutedNodes = [...nodes];
       
-      // Calculate required width for each subtree (bottom-up)
       const calculateSubtreeWidth = (nodeId: string): number => {
         const childEdges = edges.filter(e => e.source === nodeId);
         const childCount = childEdges.length;
         
         if (childCount === 0) {
-          // Leaf node: return minimum width
           return 150;
         }
         
-        // Calculate total width needed for all children
         const childWidths = childEdges.map(edge => calculateSubtreeWidth(edge.target));
         const totalChildWidth = childWidths.reduce((sum, w) => sum + w, 0);
         
-        // Add minimum gaps between children (gap before, between, and after each child)
         const minGap = 80;
         const gapSpace = (childCount + 1) * minGap;
         
-        // Total width = child widths + gap space
         return totalChildWidth + gapSpace;
       };
       
@@ -403,27 +403,19 @@ export function AnalyzedASTVisualizer({ analyzedAst, identifierMapping, compiler
         const childCount = childEdges.length;
         
         if (childCount > 0) {
-          // Calculate width needed for each child based on its subtree
           const childWidths = childEdges.map(edge => calculateSubtreeWidth(edge.target));
           const totalChildWidth = childWidths.reduce((sum, w) => sum + w, 0);
           
           if (childCount === 1) {
-            // Single child: center it
             const childWidth = childWidths[0];
             const childX = x;
             const childY = y + 150;
             positionSubtree(childEdges[0].target, childX, childY, childWidth);
           } else {
-            // Multiple children: distribute with equal gaps
             const minGap = 80;
-            
-            // Total space available for gaps (parent width - sum of child widths)
             const totalGapSpace = width - totalChildWidth;
-            
-            // Divide gap space equally among (childCount + 1) gaps
             const actualGap = Math.max(minGap, totalGapSpace / (childCount + 1));
             
-            // Position children left to right with equal gaps
             let currentX = x - (width / 2) + actualGap;
             childEdges.forEach((edge, index) => {
               const childWidth = childWidths[index];
@@ -436,7 +428,6 @@ export function AnalyzedASTVisualizer({ analyzedAst, identifierMapping, compiler
         }
       };
       
-      // Calculate initial width based on tree complexity
       const rootWidth = calculateSubtreeWidth(rootNode.id);
       const maxWidth = Math.max(1600, rootWidth);
       positionSubtree(rootNode.id, maxWidth / 2, 50, maxWidth);
@@ -447,13 +438,29 @@ export function AnalyzedASTVisualizer({ analyzedAst, identifierMapping, compiler
       nodes: layoutNodes(flowNodes, flowEdges), 
       edges: flowEdges 
     };
-  }, [analyzedAst, getDisplayName, getAssignmentOperator]);
+  }, [executedAst, getDisplayName]);
 
   return (
     <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border">
       <h3 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">
-        Analyzed AST (with Type Coercion Nodes)
+        Execution Tree (with Computed Results)
       </h3>
+      
+      {/* Legend */}
+      <div className="flex flex-wrap gap-3 mb-3 text-xs">
+        <div className="flex items-center gap-1">
+          <div className="w-4 h-4 rounded bg-purple-600"></div>
+          <span className="text-gray-600 dark:text-gray-400">int</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <div className="w-4 h-4 rounded bg-pink-600"></div>
+          <span className="text-gray-600 dark:text-gray-400">float</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <div className="w-4 h-4 rounded bg-green-600"></div>
+          <span className="text-gray-600 dark:text-gray-400">bool</span>
+        </div>
+      </div>
       
       {nodes.length > 0 ? (
         <div className="w-full h-[500px] bg-gray-50 dark:bg-gray-900 rounded border overflow-hidden">
@@ -495,8 +502,8 @@ export function AnalyzedASTVisualizer({ analyzedAst, identifierMapping, compiler
       ) : (
         <div className="w-full h-[500px] bg-gray-50 dark:bg-gray-900 rounded border flex items-center justify-center">
           <div className="text-gray-500 dark:text-gray-400 text-center">
-            <div className="text-lg font-semibold mb-2">Analyzed AST</div>
-            <div className="text-sm">The analyzed AST will appear here after semantic analysis</div>
+            <div className="text-lg font-semibold mb-2">Execution Tree</div>
+            <div className="text-sm">The execution tree will appear here after direct execution</div>
           </div>
         </div>
       )}

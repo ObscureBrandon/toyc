@@ -140,7 +140,7 @@ async def parse_source_code(request: ParserRequest) -> ParserResponse:
 async def trace_code(request: TraceRequest) -> TraceResponse:
     """Trace step-by-step compilation process."""
     try:
-        result = trace_compilation(request.source_code)
+        result = trace_compilation(request.source_code, mode=request.mode)
 
         # Convert steps to TraceStep objects
         trace_steps = []
@@ -165,6 +165,10 @@ async def trace_code(request: TraceRequest) -> TraceResponse:
             error=result.get("error"),
             error_phase=result.get("error_phase"),
             identifier_mapping=result.get("identifier_mapping"),
+            # Hybrid mode execution results
+            executed_ast=result.get("executed_ast"),
+            variables=result.get("variables"),
+            output=result.get("output"),
         )
 
     except Exception as e:

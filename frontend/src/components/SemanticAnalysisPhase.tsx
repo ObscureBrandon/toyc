@@ -9,6 +9,7 @@ interface SemanticAnalysisPhaseProps {
   currentStep: TraceStep | null;
   analyzedAst?: ASTNode;
   identifierMapping?: Record<string, string>;
+  compilerMode?: "standard" | "hybrid";
 }
 
 interface SemanticStep {
@@ -17,7 +18,7 @@ interface SemanticStep {
   details: string;
 }
 
-export function SemanticAnalysisPhase({ visibleSteps, currentStep, analyzedAst, identifierMapping }: SemanticAnalysisPhaseProps) {
+export function SemanticAnalysisPhase({ visibleSteps, currentStep, analyzedAst, identifierMapping, compilerMode = "standard" }: SemanticAnalysisPhaseProps) {
   const semanticSteps = visibleSteps.filter(step => step.phase === 'semantic-analysis');
   
   const semanticTrace: SemanticStep[] = semanticSteps.map(step => ({
@@ -47,7 +48,7 @@ export function SemanticAnalysisPhase({ visibleSteps, currentStep, analyzedAst, 
     <div className="space-y-6">
       {/* Top: Analyzed AST Tree - Full width */}
       <div className="w-full">
-        <AnalyzedASTVisualizer analyzedAst={analyzedAst} identifierMapping={identifierMapping} />
+        <AnalyzedASTVisualizer analyzedAst={analyzedAst} identifierMapping={identifierMapping} compilerMode={compilerMode} />
       </div>
 
       {/* Bottom: Semantic Analysis Trace */}

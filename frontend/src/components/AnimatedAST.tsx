@@ -24,6 +24,7 @@ interface AnimatedASTProps {
   visibleSteps: TraceStep[];
   currentStep: TraceStep | null;
   identifierMapping?: Record<string, string>;
+  compilerMode?: "standard" | "hybrid";
 }
 
 interface FlowNode extends Node {
@@ -181,15 +182,22 @@ const FitViewOnChange = ({ nodeCount }: { nodeCount: number }) => {
   return null;
 };
 
-export function AnimatedAST({ visibleSteps, currentStep, identifierMapping }: AnimatedASTProps) {
+export function AnimatedAST({ visibleSteps, currentStep, identifierMapping, compilerMode = "standard" }: AnimatedASTProps) {
   // Helper function to get display name with normalized identifier
   const getDisplayName = useCallback((originalName: string): string => {
     const normalizedName = identifierMapping?.[originalName];
     if (normalizedName) {
-      return `${normalizedName} (${originalName})`;
+      // Use uppercase for original name in hybrid mode
+      const displayOriginal = compilerMode === "hybrid" ? originalName.toUpperCase() : originalName;
+      return `${normalizedName} (${displayOriginal})`;
     }
-    return originalName;
-  }, [identifierMapping]);
+    return compilerMode === "hybrid" ? originalName.toUpperCase() : originalName;
+  }, [identifierMapping, compilerMode]);
+
+  // Get the assignment operator based on mode
+  const getAssignmentOperator = useCallback(() => {
+    return compilerMode === "hybrid" ? "is" : ":=";
+  }, [compilerMode]);
 
   // Filter to AST node creation steps
   const astSteps = visibleSteps.filter(step => 
@@ -273,7 +281,7 @@ export function AnimatedAST({ visibleSteps, currentStep, identifierMapping }: An
           label = 'Program';
           break;
         case 'Assignment':
-          label = `${getDisplayName(astNode.identifier || 'unknown')} =`;
+          label = getAssignmentOperator();
           break;
         case 'BinaryOp':
           label = astNode.operator || '?';
@@ -361,8 +369,13 @@ export function AnimatedAST({ visibleSteps, currentStep, identifierMapping }: An
        }
 
       // Build children based on AST node structure
-      if (astNode.type === 'Assignment' && 'value' in astNode && astNode.value && typeof astNode.value === 'object') {
-        buildFlowNodes(astNode.value as ASTNode, currentId, depth + 1);
+      if (astNode.type === 'Assignment') {
+        if ('left' in astNode && astNode.left && typeof astNode.left === 'object') {
+          buildFlowNodes(astNode.left as ASTNode, currentId, depth + 1);
+        }
+        if ('right' in astNode && astNode.right && typeof astNode.right === 'object') {
+          buildFlowNodes(astNode.right as ASTNode, currentId, depth + 1);
+        }
       } else if (astNode.type === 'BinaryOp') {
         if ('left' in astNode && astNode.left && typeof astNode.left === 'object') {
           buildFlowNodes(astNode.left as ASTNode, currentId, depth + 1);
@@ -503,7 +516,7 @@ export function AnimatedAST({ visibleSteps, currentStep, identifierMapping }: An
       incrementalNodes: layoutNodes(nodes), 
       incrementalEdges: edges 
     };
-  }, [astSteps, currentStep?.step_id, getDisplayName]);
+  }, [astSteps, currentStep?.step_id, getDisplayName, getAssignmentOperator]);
 
   // Compute visible nodes and edges based on current step
   const { visibleNodes, visibleEdges } = useMemo(() => {
