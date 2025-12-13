@@ -76,11 +76,15 @@ export function UndefinedVariablesForm({ variables, mode, onSubmit }: UndefinedV
       });
       onSubmit({ types });
     } else {
+      // Hybrid mode: send both values AND inferred types
       const values: Record<string, number> = {};
+      const types: Record<string, 'int' | 'float'> = {};
       inputs.forEach((input) => {
         values[input.name] = parseFloat(input.value);
+        // Determine type based on whether user typed a decimal point
+        types[input.name] = input.value.includes('.') ? 'float' : 'int';
       });
-      onSubmit({ values });
+      onSubmit({ values, types });
     }
   };
 
@@ -140,7 +144,7 @@ export function UndefinedVariablesForm({ variables, mode, onSubmit }: UndefinedV
                 )}
                 {input.isValid && input.value && (
                   <span className="text-xs text-gray-500 dark:text-gray-400">
-                    {Number.isInteger(parseFloat(input.value)) ? 'int' : 'float'}
+                    {input.value.includes('.') ? 'float' : 'int'}
                   </span>
                 )}
               </div>

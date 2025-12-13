@@ -79,12 +79,17 @@ const getResultBadgeColor = (resultType?: string): string => {
   }
 };
 
-const formatResult = (result: number | string | boolean | undefined): string => {
+const formatResult = (result: number | string | boolean | undefined, resultType?: string): string => {
   if (result === undefined || result === null) return '';
   if (typeof result === 'boolean') return result ? 'true' : 'false';
   if (typeof result === 'number') {
     if (!Number.isFinite(result)) return 'Infinity';
-    if (!Number.isInteger(result)) return result.toFixed(2);
+    // If it's a float type and a whole number, show .0 suffix
+    if (resultType === 'float' && Number.isInteger(result)) {
+      return `${result}.0`;
+    }
+    // For non-integer numbers, just show the value as-is
+    return String(result);
   }
   return String(result);
 };
@@ -102,7 +107,7 @@ const ExecutionNode = ({ data }: { data: FlowNode['data'] }) => {
           transition={{ duration: 0.3, delay: 0.1 }}
           className={`px-2 py-1 rounded text-xs font-mono mb-1 font-bold shadow-md ${getResultBadgeColor(data.resultType)} ${data.error ? 'ring-2 ring-red-400' : ''}`}
         >
-          {formatResult(data.result)}
+          {formatResult(data.result, data.resultType)}
           {data.error && <span className="ml-1 text-red-200">!</span>}
         </motion.div>
       )}

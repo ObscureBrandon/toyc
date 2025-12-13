@@ -1928,9 +1928,20 @@ def trace_compilation(
         }
 
     # Phase 3: Semantic Analysis
+    # Use provided types if available, otherwise derive from values in hybrid mode
+    predefined_types_for_analyzer = variable_types
+    if predefined_types_for_analyzer is None and hybrid_mode and variable_values:
+        # Derive types from values: if value is float type, treat as float
+        predefined_types_for_analyzer = {}
+        for var_name, value in variable_values.items():
+            if isinstance(value, float):
+                predefined_types_for_analyzer[var_name] = "float"
+            else:
+                predefined_types_for_analyzer[var_name] = "int"
+    
     semantic_analyzer = TracingSemanticAnalyzer(
         step_id_start=len(lexer.steps) + len(parser.steps),
-        predefined_types=variable_types,
+        predefined_types=predefined_types_for_analyzer,
     )
     
     try:
